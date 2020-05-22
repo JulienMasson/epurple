@@ -1,0 +1,24 @@
+#+TITLE:   epurple
+#+AUTHOR:  Julien Masson
+#+OPTIONS: \n:t
+
+*epurple* is an instant messaging environment for [[https://www.gnu.org/software/emacs/][Emacs]] based on [[https://developer.pidgin.im/wiki/WhatIsLibpurple][libpurple]].
+
+*libpurple* is a powerful library which support many protocols: slack, facebook, whatsapp, skype ...
+
+You can find the complete list here: [[https://pidgin.im/plugins][protocols]]
+
+This project has been split in two parts:
+- server: program based on *libpurple* which handle the communication with accounts
+- emacs: handle the communication with the server and take care of the UI rendering
+
+**** Emacs configuration:
+#+begin_src elisp
+(require 'epurple)
+(epurple-init)
+#+end_src
+
+**** Warning:
+*epurple* doesn't manage account configuration.
+
+In order to configure/add accounts, please use [[https://pidgin.im/][Pidgin]].
