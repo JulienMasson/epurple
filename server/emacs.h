@@ -16,27 +16,13 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef EPURPLE_H
-#define EPURPLE_H
+#ifndef EMACS_H
+#define EMACS_H
 
-#include <errno.h>
-#include <poll.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <sys/socket.h>
-#include <sys/un.h>
-#include <unistd.h>
+#include "epurple.h"
 
-#include <glib.h>
-#include <libpurple/account.h>
-#include <libpurple/core.h>
-#include <libpurple/eventloop.h>
+void emacs_handler(struct epurple *epurple, char *buf, size_t len);
 
-#define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
-
-struct epurple {
-	int sock_fd;
-	int emacs_fd;
-};
+void emacs_send(struct epurple *epurple, int id, char *data, size_t len);
 
 #endif

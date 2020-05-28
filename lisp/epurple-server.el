@@ -21,6 +21,7 @@
 
 ;;; Code:
 
+(require 'ansi-color)
 (require 'epurple-commands)
 
 ;;; Struct
@@ -41,42 +42,50 @@
 
 ;;; Internal Functions
 
-(defun epurple-server--sentinel (proc event)
-  (message "%s exited with status: %s" proc (process-exit-status proc))
-  (epurple-server-exit))
+(defun epurple-server--sentinel (process event)
+  (let ((status (process-exit-status process)))
+    (unless (zerop status)
+      (message "%s exited with status: %s" process status)
+      (switch-to-buffer-other-window (process-buffer process)))
+    (epurple-server-exit)))
 
-(defun epurple-server--filter (proc str)
-  (with-current-buffer (process-buffer proc)
-    (goto-char (point-max))
-    (insert str)))
+(defun epurple-server--filter (process str)
+  (with-current-buffer (process-buffer process)
+    (let ((inhibit-read-only t))
+      (goto-char (point-max))
+      (insert str))))
 
 ;; compilation
 
 (defun epurple-server--sentinel-compilation (process event)
-  (if (zerop (process-exit-status process))
-      (progn
-	(kill-buffer (process-buffer process))
-	(epurple-server--start))
-    (message "epurple: compilation %s" (propertize "failed" 'face 'error))
-    (switch-to-buffer-other-window (process-buffer process))))
+  (let ((buffer (process-buffer process)))
+    (if (zerop (process-exit-status process))
+	(progn
+	  (kill-buffer buffer)
+	  (epurple-server--start))
+      (message "epurple: compilation %s" (propertize "failed" 'face 'error))
+      (switch-to-buffer-other-window buffer))))
 
 (defun epurple-server--sentinel-configuration (process event)
-  (if (eq (process-exit-status process) 0)
-      (with-current-buffer (process-buffer process)
-	(let ((process (start-process "epurple-server-compilation"
-				      (current-buffer) "ninja" "-C" "build")))
-	  (set-process-filter process 'epurple-server--filter)
-	  (set-process-sentinel process 'epurple-server--sentinel-compilation)))
-    (message "epurple: configuration %s" (propertize "failed" 'face 'error))
-    (switch-to-buffer-other-window (process-buffer process))))
+  (let ((buffer (process-buffer process)))
+    (if (zerop (process-exit-status process))
+	(with-current-buffer buffer
+	  (let ((process (start-process "epurple-server-compilation"
+					(current-buffer) "ninja" "-C" "build")))
+	    (set-process-filter process 'epurple-server--filter)
+	    (set-process-sentinel process 'epurple-server--sentinel-compilation)))
+      (message "epurple: configuration %s" (propertize "failed" 'face 'error))
+      (switch-to-buffer-other-window buffer))))
 
 (defun epurple-server--configure-compile ()
   (let* ((default-directory epurple-server--src-dir)
 	 (buffer (get-buffer-create "*epurple-server-compilation*"))
 	 (process (start-process "epurple-server-configuration"
-				 buffer "meson" "build")))
+				 buffer "meson" "build"))
+	 (inhibit-read-only t))
     (with-current-buffer buffer
-      (erase-buffer))
+      (erase-buffer)
+      (compilation-mode))
     (set-process-filter process 'epurple-server--filter)
     (set-process-sentinel process 'epurple-server--sentinel-configuration)))
 
@@ -96,7 +105,8 @@
 		   :filter   #'epurple-server--filter-socket
 		   :sentinel #'epurple-server--sentinel)))
     (set-process-coding-system process 'binary 'binary)
-    (setf (epurple-server-socket epurple-server) process)))
+    (setf (epurple-server-socket epurple-server) process)
+    (epurple-accounts-get-all #'epurple-accounts-info)))
 
 ;; server
 
@@ -106,7 +116,9 @@
     (epurple-server--socket-start))
   (with-current-buffer (process-buffer proc)
     (goto-char (point-max))
-    (insert str)))
+    (let ((beg (point)))
+      (insert str)
+      (ansi-color-apply-on-region beg (point-max)))))
 
 (defun epurple-server--start ()
   (let* ((default-directory epurple-server--src-dir)
@@ -140,9 +152,9 @@
 (defun epurple-server-exit ()
   (with-struct-slots (process socket) epurple-server epurple-server
     (when process (delete-process process))
-    (when socket (delete-process socket)))
-  (setf (epurple-server-process epurple-server) nil)
-  (setf (epurple-server-socket epurple-server) nil))
+    (when socket (delete-process socket))
+    (setq process nil)
+    (setq socket nil)))
 
 (defun epurple-server-init ()
   (if (file-exists-p epurple-server--program)

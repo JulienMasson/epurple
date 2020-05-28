@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "commands.h"
 #include "epurple.h"
+#include "emacs.h"
 
 #define SERVER_SOCK_FILE ".epurple.sock"
 #define MAX_BUF_SIZE     4096
@@ -26,17 +26,17 @@ static void cleanup(struct epurple *epurple)
 {
 	unlink(SERVER_SOCK_FILE);
 
-	if (epurple->fd >= 0)
-		close(epurple->fd);
+	if (epurple->sock_fd >= 0)
+		close(epurple->sock_fd);
 
-	if (epurple->sockfd >= 0)
-		close(epurple->sockfd);
+	if (epurple->emacs_fd >= 0)
+		close(epurple->emacs_fd);
 }
 
 static void handler(struct epurple *epurple, int fd, char *buf, size_t len)
 {
-	if (epurple->fd == fd)
-		commands_handler(epurple, buf, len);
+	if (epurple->emacs_fd == fd)
+		emacs_handler(epurple, buf, len);
 }
 
 static void loop(struct epurple *epurple)
@@ -49,7 +49,7 @@ static void loop(struct epurple *epurple)
 	fds = malloc(sizeof(struct pollfd *) * nfds);
 	memset(fds, 0, sizeof(*fds));
 
-	fds[0].fd = epurple->fd;
+	fds[0].fd = epurple->emacs_fd;
 	fds[0].events = POLLIN;
 
 	while (poll(fds, nfds, -1) != -1) {
@@ -81,43 +81,69 @@ out:
 static int wait_connection(struct epurple *epurple)
 {
 	struct sockaddr_un addr;
-	int fd, sockfd;
+	int sock_fd, emacs_fd;
 
-	if ((sockfd = socket(PF_UNIX, SOCK_STREAM, 0)) < 0) {
+	if ((sock_fd = socket(PF_UNIX, SOCK_STREAM, 0)) < 0) {
 		perror("Failed to create socket");
 		return -1;
 	}
-	epurple->sockfd = sockfd;
+	epurple->sock_fd = sock_fd;
 
 	memset(&addr, 0, sizeof(addr));
 	addr.sun_family = AF_UNIX;
 	strcpy(addr.sun_path, SERVER_SOCK_FILE);
 	unlink(SERVER_SOCK_FILE);
-	if (bind(sockfd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+	if (bind(sock_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
 		perror("Failed to bind the socket");
 		return -1;
 	}
 
-	if (listen(sockfd, 5) < 0) {
+	if (listen(sock_fd, 5) < 0) {
 		perror("Failed to mark the socket as passive");
 		return -1;
 	}
 
 	printf("Waiting Emacs\n");
-	if ((fd = accept(sockfd, NULL, NULL)) < 0) {
+	if ((emacs_fd = accept(sock_fd, NULL, NULL)) < 0) {
 		perror("Failed to accept connection");
 		return -1;
 	}
-	epurple->fd = fd;
+	epurple->emacs_fd = emacs_fd;
 	printf("Got connexion\n");
 
 	return 0;
 }
 
-void epurple_send(struct epurple *epurple, void *buf, size_t len)
+static guint input_add(int fd, PurpleInputCondition cond, PurpleInputFunction func,
+		       gpointer data)
 {
-	if (write(epurple->fd, buf, len) == -1)
-		perror("Failed to send");
+	printf("Input add\n");
+	return 0;
+}
+
+static PurpleEventLoopUiOps eventloop_ops =
+{
+	g_timeout_add,
+	g_source_remove,
+	input_add,
+	g_source_remove,
+	NULL,
+	g_timeout_add_seconds,
+	NULL,
+	NULL,
+	NULL
+};
+
+static int purple_init(struct epurple *epurple)
+{
+	purple_eventloop_set_ui_ops(&eventloop_ops);
+
+	if (purple_core_init("epurple") == FALSE) {
+		perror("Failed to init purple core");
+		return -1;
+	}
+
+	return 0;
 }
 
 int main(void)
@@ -126,6 +152,11 @@ int main(void)
 	int status = EXIT_SUCCESS;
 
 	if (wait_connection(&epurple)) {
+		status = EXIT_FAILURE;
+		goto out;
+	}
+
+	if (purple_init(&epurple)) {
 		status = EXIT_FAILURE;
 		goto out;
 	}

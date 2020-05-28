@@ -35,4 +35,16 @@
 	 (error "%s is not a %s" ',inst ',type))
        ,@body)))
 
+(defun alist-to-struct (alist struct-type)
+  (let* ((class (cl--struct-get-class struct-type))
+	 (slots (cl--struct-class-slots class))
+	 (descs (mapcar #'cl--slot-descriptor-name slots))
+	 (constructor (intern (format "make-%s" (symbol-name struct-type))))
+	 (struct (funcall constructor)))
+    (pcase-dolist (`(,slot . ,value) alist)
+      (when (member slot descs)
+	(let ((idx (cl-struct-slot-offset struct-type slot)))
+	  (setf (aref struct idx) value))))
+    struct))
+
 (provide 'epurple-utils)

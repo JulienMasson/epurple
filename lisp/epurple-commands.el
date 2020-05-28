@@ -26,11 +26,9 @@
 ;;; Internal Variables
 
 (defvar epurple--header-spec '((command strz 80)
-			      (id      u32r)))
+			       (id      u32r)))
 
 (defvar epurple--header-length (bindat-length header-spec '((command "") (id 0))))
-
-(defvar epurple--handlers '(("ping" . epurple--ping-handler)))
 
 (defvar epurple--queue nil)
 
@@ -38,17 +36,16 @@
 
 ;;; Internal Functions
 
-(defun epurple--ping-handler (id)
-  (message "Ping -> %s" id))
-
 (defun epurple--send (command payload payload-spec &optional cb)
   (cl-incf epurple--id)
-  (let* ((buf-spec `((header struct epurple--header-spec)
-		     (data   struct ,payload-spec)))
+  (let* ((buf-spec (if payload
+		       `((header struct epurple--header-spec)
+			 (data   struct ,payload-spec))
+		     `((header struct epurple--header-spec))))
 	 (header `(header . ((command . ,command)
 			     (id      . ,epurple--id))))
 	 (data `(data . ,payload))
-	 (struct (list header data))
+	 (struct (if payload (list header data) (list header)))
 	 (buf (bindat-pack buf-spec struct)))
     (when cb
       (add-to-list 'epurple--queue (cons epurple--id cb) t))
@@ -56,30 +53,38 @@
 
 ;;; External Functions
 
-(defvar epurple--ping-spec '((value     u32r)
-			     (name      strz 256)
-			     (new_value u32r)))
+;; accounts
+(defvar epurple--account-spec '((index       u32r)
+				(username    strz 80)
+				(alias       strz 80)
+				(protocol_id strz 80)))
 
-(defun epurple-ping-resp (payload)
-  (let ((decoded (bindat-unpack epurple--ping-spec payload)))
-    (let-alist decoded
-      (message "%s -> %d:%d" .name .value .new_value))))
+(defvar epurple--account-length (bindat-length epurple--account-spec
+					       '((index 0) (username "")
+						 (alias "") (protocol_id ""))))
 
-(defun epurple-ping ()
-  (let ((payload '((value . 6)
-		   (name . "yop")
-		   (new_value . 22))))
-    (epurple--send "ping" payload 'epurple--ping-spec
-		   #'epurple-ping-resp)))
+(defun epurple-accounts-get-all-cb (cb payload)
+  (let* ((length (/ (length payload) epurple--account-length))
+	 (spec `((accounts repeat ,length
+			   (struct epurple--account-spec))))
+	 (decoded (bindat-unpack spec payload)))
+    (funcall cb (assoc-default 'accounts decoded))))
 
+(defun epurple-accounts-get-all (cb)
+  (epurple--send "accounts_get_all" nil nil
+		 (apply-partially #'epurple-accounts-get-all-cb cb)))
+
+;; handler
 (defun epurple-commands-handler (str)
   (let* ((header (substring str 0 epurple--header-length))
 	 (data (substring str epurple--header-length (length str)))
 	 (decoded (bindat-unpack epurple--header-spec header)))
     (let-alist decoded
       (if-let ((resp (assoc-default .id epurple--queue)))
-	  (funcall resp data)
-	(if-let ((handler (assoc-default .command epurple--handlers)))
+	  (progn
+	    (funcall resp data)
+	    (setq epurple--queue (assq-delete-all .id epurple--queue)))
+	(if-let ((handler (assoc-default .command epurple-handlers)))
 	    (funcall handler data)
 	  (message "Unknown command: %s" .command))))))
 

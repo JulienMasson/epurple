@@ -23,10 +23,28 @@
 
 (require 'epurple-server)
 
+;;; Struct
+
+(cl-defstruct epurple-account index username alias protocol_id)
+
+;;; Internal Variables
+
+(defvar epurple--accounts nil)
+
 ;;; External Functions
+
+(defun epurple-accounts-info (accounts)
+  (dolist (account accounts)
+    (push (alist-to-struct account 'epurple-account) epurple--accounts)))
+
+(defun epurple-exit ()
+  (interactive)
+  (setq epurple--accounts nil)
+  (epurple-server-exit))
 
 (defun epurple-init ()
   (interactive)
+  (epurple-server-exit)
   (epurple-server-init))
 
 (provide 'epurple)

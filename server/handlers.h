@@ -16,13 +16,18 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef COMMANDS_H
-#define COMMANDS_H
+#ifndef HANDLERS_H
+#define HANDLERS_H
 
 #include "epurple.h"
 
-void commands_handler(struct epurple *epurple, char *buf, size_t len);
+#define COMMAND_NAME_SIZE 80
 
-void ping_handler(struct epurple *epurple, int id, char *data, size_t len);
+struct handler {
+	char command[COMMAND_NAME_SIZE];
+	void (*func)(struct epurple *, int, char *, size_t);
+};
+
+struct handler *handlers_find(char *command);
 
 #endif
