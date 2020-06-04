@@ -106,13 +106,13 @@
 		   :sentinel #'epurple-server--sentinel)))
     (set-process-coding-system process 'binary 'binary)
     (setf (epurple-server-socket epurple-server) process)
-    (epurple-accounts-get-all #'epurple-accounts-info)))
+    (epurple-purple-init #'epurple-init-done)))
 
 ;; server
 
 (defun epurple-server--filter-process (proc str)
   (when (and (not (epurple-server-socket epurple-server))
-	     (string= "Waiting Emacs\n" str))
+	     (string-match ".*Waiting Emacs.*" str))
     (epurple-server--socket-start))
   (with-current-buffer (process-buffer proc)
     (goto-char (point-max))
@@ -135,7 +135,7 @@
 
 (defun epurple-server-recompile ()
   (interactive)
-  (epurple-server-exit)
+  (epurple-exit)
   (let ((default-directory epurple-server--src-dir))
     (when (file-exists-p "build")
       (delete-directory "build" t))

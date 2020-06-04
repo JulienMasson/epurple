@@ -21,8 +21,8 @@
 
 #include "epurple.h"
 
-void emacs_handler(struct epurple *epurple, char *buf, size_t len);
+void emacs_handler(struct epurple *epurple, int fd, void *data);
 
-void emacs_send(struct epurple *epurple, int id, char *data, size_t len);
+void emacs_send(struct epurple *epurple, int id, char *payload, size_t len);
 
 #endif

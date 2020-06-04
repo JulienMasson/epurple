@@ -22,20 +22,26 @@
 ;;; Code:
 
 (require 'epurple-server)
+(require 'epurple-utils)
 
 ;;; Struct
 
-(cl-defstruct epurple-account index username alias protocol_id)
+(cl-defstruct epurple-account username alias protocol_id)
 
 ;;; Internal Variables
 
 (defvar epurple--accounts nil)
 
-;;; External Functions
+;;; Internal Functions
 
-(defun epurple-accounts-info (accounts)
+(defun epurple--accounts-info (accounts)
   (dolist (account accounts)
     (push (alist-to-struct account 'epurple-account) epurple--accounts)))
+
+;;; External Functions
+
+(defun epurple-init-done ()
+  (epurple-accounts-get-all #'epurple--accounts-info))
 
 (defun epurple-exit ()
   (interactive)
@@ -44,7 +50,7 @@
 
 (defun epurple-init ()
   (interactive)
-  (epurple-server-exit)
+  (epurple-exit)
   (epurple-server-init))
 
 (provide 'epurple)

@@ -20,65 +20,55 @@
 #include "emacs.h"
 
 #define SERVER_SOCK_FILE ".epurple.sock"
-#define MAX_BUF_SIZE     4096
 
-static void cleanup(struct epurple *epurple)
+struct pollfd fds[MAX_POLL_FD];
+struct epurple epurple;
+
+static void cleanup()
 {
 	unlink(SERVER_SOCK_FILE);
 
-	if (epurple->sock_fd >= 0)
-		close(epurple->sock_fd);
+	if (epurple.sock_fd >= 0)
+		close(epurple.sock_fd);
 
-	if (epurple->emacs_fd >= 0)
-		close(epurple->emacs_fd);
+	if (epurple.emacs_fd >= 0)
+		close(epurple.emacs_fd);
+
+	for (int i = 0; i < MAX_POLL_FD; i++) {
+		if (fds[i].fd != -1)
+			close(fds[i].fd);
+	}
 }
 
-static void handler(struct epurple *epurple, int fd, char *buf, size_t len)
+static void events_loop()
 {
-	if (epurple->emacs_fd == fd)
-		emacs_handler(epurple, buf, len);
-}
+	struct epurple_event event;
 
-static void loop(struct epurple *epurple)
-{
-	struct pollfd *fds;
-	char buf[MAX_BUF_SIZE];
-	ssize_t len;
-	int i, nfds = 1;
+	while (poll(fds, MAX_POLL_FD, -1) != -1) {
 
-	fds = malloc(sizeof(struct pollfd *) * nfds);
-	memset(fds, 0, sizeof(*fds));
+		for (int i = 0; i < MAX_POLL_FD; i++) {
 
-	fds[0].fd = epurple->emacs_fd;
-	fds[0].events = POLLIN;
-
-	while (poll(fds, nfds, -1) != -1) {
-
-		for (i = 0; i < nfds; i++) {
+			if (fds[i].fd == -1)
+				continue;
 
 			if (fds[i].revents & (POLLERR | POLLHUP | POLLNVAL)) {
 				printf("Poll Failed\n");
 				goto out;
 			}
 
-			if (fds[i].revents & POLLIN) {
-				if ((len = read(fds[i].fd, buf, MAX_BUF_SIZE)) != 1) {
-					handler(epurple, fds[i].fd, buf, len);
-					memset(buf, '\0', sizeof(buf));
-				} else {
-					perror("Failed to read");
-					goto out;
-				}
+			if (fds[i].revents & fds[i].events) {
+				event = epurple.events[i];
+				if (event.handler)
+					event.handler(&epurple, fds[i].fd, event.data);
 			}
 		}
 	}
 
 out:
-	printf("Exit main loop\n");
-	free(fds);
+	printf("Exit events loop\n");
 }
 
-static int wait_connection(struct epurple *epurple)
+static int wait_connection()
 {
 	struct sockaddr_un addr;
 	int sock_fd, emacs_fd;
@@ -87,7 +77,7 @@ static int wait_connection(struct epurple *epurple)
 		perror("Failed to create socket");
 		return -1;
 	}
-	epurple->sock_fd = sock_fd;
+	epurple.sock_fd = sock_fd;
 
 	memset(&addr, 0, sizeof(addr));
 	addr.sun_family = AF_UNIX;
@@ -108,61 +98,71 @@ static int wait_connection(struct epurple *epurple)
 		perror("Failed to accept connection");
 		return -1;
 	}
-	epurple->emacs_fd = emacs_fd;
+	epurple.emacs_fd = emacs_fd;
+	epurple_add_event(emacs_fd, POLLIN, emacs_handler, NULL);
 	printf("Got connexion\n");
 
 	return 0;
 }
 
-static guint input_add(int fd, PurpleInputCondition cond, PurpleInputFunction func,
-		       gpointer data)
+static int epurple_event_found(int fd, short events)
 {
-	printf("Input add\n");
+	for (int i = 0; i < MAX_POLL_FD; i++) {
+		if ((fds[i].fd == fd) && (fds[i].events == events))
+			return 1;
+	}
 	return 0;
 }
 
-static PurpleEventLoopUiOps eventloop_ops =
+uint epurple_add_event(int fd, short events, epurple_hander handler, void *data)
 {
-	g_timeout_add,
-	g_source_remove,
-	input_add,
-	g_source_remove,
-	NULL,
-	g_timeout_add_seconds,
-	NULL,
-	NULL,
-	NULL
-};
-
-static int purple_init(struct epurple *epurple)
-{
-	purple_eventloop_set_ui_ops(&eventloop_ops);
-
-	if (purple_core_init("epurple") == FALSE) {
-		perror("Failed to init purple core");
-		return -1;
+	if (epurple_event_found(fd, events)) {
+		printf("Event already added: %d - %d\n", fd, events);
+		return MAX_POLL_FD;
 	}
 
-	return 0;
+	for (uint i = 0; i < MAX_POLL_FD; i++) {
+		if (fds[i].fd == -1) {
+			epurple.events[i].handler = handler;
+			epurple.events[i].data = data;
+			fds[i].fd = fd;
+			fds[i].events = events;
+			return i;
+		}
+	}
+	printf("MAX_POLL_FD reached\n");
+	return MAX_POLL_FD;
+}
+
+void epurple_remove_event(uint handle)
+{
+	if ((handle > 0) || (handle < MAX_POLL_FD)) {
+		/* close(fd); */
+		fds[handle].fd = -1;
+		fds[handle].events = 0;
+		epurple.events[handle].handler = NULL;
+		epurple.events[handle].data = NULL;
+	}
 }
 
 int main(void)
 {
-	struct epurple epurple;
 	int status = EXIT_SUCCESS;
 
-	if (wait_connection(&epurple)) {
+	for (int i = 0; i < MAX_POLL_FD; i++) {
+		fds[i].fd = -1;
+		fds[i].events = 0;
+		epurple.events[i].handler = NULL;
+		epurple.events[i].data = NULL;
+	}
+
+	if (wait_connection()) {
 		status = EXIT_FAILURE;
 		goto out;
 	}
 
-	if (purple_init(&epurple)) {
-		status = EXIT_FAILURE;
-		goto out;
-	}
-
-	loop(&epurple);
+	events_loop();
 out:
-	cleanup(&epurple);
+	cleanup();
 	return status;
 }

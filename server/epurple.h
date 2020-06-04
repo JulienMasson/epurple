@@ -24,19 +24,36 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/socket.h>
+#include <sys/timerfd.h>
 #include <sys/un.h>
 #include <unistd.h>
 
 #include <glib.h>
 #include <libpurple/account.h>
 #include <libpurple/core.h>
+#include <libpurple/debug.h>
 #include <libpurple/eventloop.h>
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
+#define MAX_POLL_FD   128
+
+struct epurple;
+
+typedef void (*epurple_hander) (struct epurple *epurple, int fd, void *data);
+
+struct epurple_event {
+	epurple_hander handler;
+	void *data;
+};
 
 struct epurple {
 	int sock_fd;
 	int emacs_fd;
+	struct epurple_event events[MAX_POLL_FD];
 };
+
+uint epurple_add_event(int fd, short events, epurple_hander handler, void *data);
+
+void epurple_remove_event(uint handle);
 
 #endif

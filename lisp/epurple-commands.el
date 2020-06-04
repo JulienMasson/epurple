@@ -28,7 +28,8 @@
 (defvar epurple--header-spec '((command strz 80)
 			       (id      u32r)))
 
-(defvar epurple--header-length (bindat-length header-spec '((command "") (id 0))))
+(defvar epurple--header-length (bindat-length epurple--header-spec
+					      '((command "") (id 0))))
 
 (defvar epurple--queue nil)
 
@@ -41,7 +42,7 @@
   (let* ((buf-spec (if payload
 		       `((header struct epurple--header-spec)
 			 (data   struct ,payload-spec))
-		     `((header struct epurple--header-spec))))
+		     '((header struct epurple--header-spec))))
 	 (header `(header . ((command . ,command)
 			     (id      . ,epurple--id))))
 	 (data `(data . ,payload))
@@ -53,26 +54,41 @@
 
 ;;; External Functions
 
+;; purple
+(defun epurple-purple-init (cb)
+  (epurple--send "purple_init" nil nil `(lambda (p) (funcall #',cb))))
+
 ;; accounts
-(defvar epurple--account-spec '((index       u32r)
-				(username    strz 80)
+(defvar epurple--account-spec '((username    strz 80)
 				(alias       strz 80)
 				(protocol_id strz 80)))
 
-(defvar epurple--account-length (bindat-length epurple--account-spec
-					       '((index 0) (username "")
-						 (alias "") (protocol_id ""))))
-
 (defun epurple-accounts-get-all-cb (cb payload)
-  (let* ((length (/ (length payload) epurple--account-length))
-	 (spec `((accounts repeat ,length
-			   (struct epurple--account-spec))))
+  (let* ((account-length (bindat-length epurple--account-spec '((username "")
+								(alias "")
+								(protocol_id ""))))
+	 (length (/ (length payload) account-length))
+	 (spec `((accounts repeat ,length (struct epurple--account-spec))))
 	 (decoded (bindat-unpack spec payload)))
     (funcall cb (assoc-default 'accounts decoded))))
 
 (defun epurple-accounts-get-all (cb)
   (epurple--send "accounts_get_all" nil nil
 		 (apply-partially #'epurple-accounts-get-all-cb cb)))
+
+(defun epurple-account-connect (account)
+  (with-struct-slots (username alias protocol_id) epurple-account account
+    (let ((payload `((username    . ,username)
+		     (alias       . ,alias)
+		     (protocol_id . ,protocol_id))))
+    (epurple--send "account_connect" payload 'epurple--account-spec))))
+
+(defun epurple-account-disconnect (account)
+  (with-struct-slots (username alias protocol_id) epurple-account account
+    (let ((payload `((username    . ,username)
+		     (alias       . ,alias)
+		     (protocol_id . ,protocol_id))))
+    (epurple--send "account_disconnect" payload 'epurple--account-spec))))
 
 ;; handler
 (defun epurple-commands-handler (str)

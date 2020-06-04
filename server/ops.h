@@ -16,18 +16,13 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef HANDLERS_H
-#define HANDLERS_H
+#ifndef OPS_H
+#define OPS_H
 
 #include "epurple.h"
 
-#define COMMAND_NAME_SIZE 80
-
-struct handler {
-	char command[COMMAND_NAME_SIZE];
-	void (*func)(struct epurple *epurple, int id, char *payload, size_t len);
-};
-
-struct handler *handlers_find(char *command);
+extern PurpleEventLoopUiOps eventloop_ops;
+extern PurpleConnectionUiOps connection_ops;
+extern PurpleConversationUiOps conversation_ops;
 
 #endif

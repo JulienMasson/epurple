@@ -19,34 +19,46 @@
 #include "emacs.h"
 #include "handlers.h"
 
+#define MAX_BUF_SIZE 4096
+
 struct header {
 	char command[COMMAND_NAME_SIZE];
 	int id;
 };
 
-void emacs_handler(struct epurple *epurple, char *buf, size_t len)
+void emacs_handler(struct epurple *epurple, int fd, void *data)
 {
+	char buf[MAX_BUF_SIZE];
+	size_t buffer_len;
+
+	memset(buf, '\0', sizeof(buf));
+	if ((buffer_len = read(fd, buf, MAX_BUF_SIZE)) == -1) {
+		perror("Failed to read");
+		return;
+	}
+
 	struct header *header = (struct header *)buf;
 	size_t header_len = sizeof(struct header);
-	char *data = buf + header_len;
+	char *payload = buf + header_len;
 	struct handler *handler;
 
 	if ((handler = handlers_find(header->command)))
-		handler->func(epurple, header->id, data, len - header_len);
+		handler->func(epurple, header->id, payload, buffer_len - header_len);
 	else
 		printf("Unknown command: %s\n", header->command);
 }
 
-void emacs_send(struct epurple *epurple, int id, char *data, size_t len)
+void emacs_send(struct epurple *epurple, int id, char *payload, size_t len)
 {
 	size_t buf_len = sizeof(struct header) + len;
 	void *buf = malloc(buf_len);
 	struct header *header = (struct header *)buf;
-	char *data_buf = buf + sizeof(struct header);
+	char *payload_buf = buf + sizeof(struct header);
 
 	memset(buf, '\0', buf_len);
 	header->id = id;
-	memcpy(data_buf, data, len);
+	if (payload)
+		memcpy(payload_buf, payload, len);
 
 	if (write(epurple->emacs_fd, buf, buf_len) == -1)
 		perror("Failed to send to Emacs");
