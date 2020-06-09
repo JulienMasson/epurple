@@ -19,10 +19,8 @@
 #include "emacs.h"
 #include "handlers.h"
 
-#define MAX_BUF_SIZE 4096
-
 struct header {
-	char command[COMMAND_NAME_SIZE];
+	char command[STR_NAME_SIZE];
 	int id;
 };
 
@@ -48,7 +46,7 @@ void emacs_handler(struct epurple *epurple, int fd, void *data)
 		printf("Unknown command: %s\n", header->command);
 }
 
-void emacs_send(struct epurple *epurple, int id, char *payload, size_t len)
+void emacs_send(struct epurple *epurple, char *command, int id, char *payload, size_t len)
 {
 	size_t buf_len = sizeof(struct header) + len;
 	void *buf = malloc(buf_len);
@@ -56,6 +54,8 @@ void emacs_send(struct epurple *epurple, int id, char *payload, size_t len)
 	char *payload_buf = buf + sizeof(struct header);
 
 	memset(buf, '\0', buf_len);
+	if (command)
+		strncpy(header->command, command, STR_NAME_SIZE);
 	header->id = id;
 	if (payload)
 		memcpy(payload_buf, payload, len);
@@ -64,4 +64,9 @@ void emacs_send(struct epurple *epurple, int id, char *payload, size_t len)
 		perror("Failed to send to Emacs");
 
 	free(buf);
+}
+
+void emacs_ack(struct epurple *epurple, int id)
+{
+	emacs_send(epurple, NULL, id, NULL, 0);
 }

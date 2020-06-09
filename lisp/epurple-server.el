@@ -27,8 +27,9 @@
 ;;; Struct
 
 (cl-defstruct epurple-server
-  (process nil)
-  (socket  nil))
+  (process      nil)
+  (socket       nil)
+  (pending-data nil))
 
 ;;; Internal Variables
 
@@ -56,7 +57,6 @@
       (insert str))))
 
 ;; compilation
-
 (defun epurple-server--sentinel-compilation (process event)
   (let ((buffer (process-buffer process)))
     (if (zerop (process-exit-status process))
@@ -90,9 +90,12 @@
     (set-process-sentinel process 'epurple-server--sentinel-configuration)))
 
 ;; socket
-
 (defun epurple-server--filter-socket (proc str)
-  (epurple-commands-handler str))
+  (with-struct-slots (pending-data) epurple-server epurple-server
+    (setq pending-data (concat pending-data str))
+    (unless (>= (length str) 4096)
+      (epurple-commands-handler pending-data)
+      (setq pending-data nil))))
 
 (defun epurple-server--socket-start ()
   (let* ((default-directory epurple-server--src-dir)
@@ -106,10 +109,9 @@
 		   :sentinel #'epurple-server--sentinel)))
     (set-process-coding-system process 'binary 'binary)
     (setf (epurple-server-socket epurple-server) process)
-    (epurple-purple-init #'epurple-init-done)))
+    (epurple-purple-init #'epurple-init--done)))
 
 ;; server
-
 (defun epurple-server--filter-process (proc str)
   (when (and (not (epurple-server-socket epurple-server))
 	     (string-match ".*Waiting Emacs.*" str))
@@ -131,35 +133,35 @@
     (set-process-sentinel process 'epurple-server--sentinel)
     (setf (epurple-server-process epurple-server) process)))
 
+(defun epurple-server--running-p ()
+  (with-struct-slots (process socket) epurple-server epurple-server
+    (and process socket)))
+
 ;;; External Functions
 
-(defun epurple-server-recompile ()
-  (interactive)
-  (epurple-exit)
+(defun epurple-server-send (buf)
+  (when (epurple-server--running-p)
+    (process-send-string (epurple-server-socket epurple-server) buf)))
+
+(defun epurple-server-exit ()
+  (with-struct-slots (process socket pending-data) epurple-server epurple-server
+    (when process (delete-process process))
+    (when socket (delete-process socket))
+    (setq process nil)
+    (setq socket nil)
+    (setq pending-data nil)))
+
+(defun epurple-server-update-init ()
   (let ((default-directory epurple-server--src-dir))
     (when (file-exists-p "build")
       (delete-directory "build" t))
     (epurple-server--configure-compile)))
 
-(defun epurple-server-running-p ()
-  (with-struct-slots (process socket) epurple-server epurple-server
-    (and process socket)))
-
-(defun epurple-server-send (buf)
-  (when (epurple-server-running-p)
-    (process-send-string (epurple-server-socket epurple-server) buf)))
-
-(defun epurple-server-exit ()
-  (with-struct-slots (process socket) epurple-server epurple-server
-    (when process (delete-process process))
-    (when socket (delete-process socket))
-    (setq process nil)
-    (setq socket nil)))
-
 (defun epurple-server-init ()
-  (if (file-exists-p epurple-server--program)
-      (epurple-server--start)
-    (message "epurple: compiling server ...")
-    (epurple-server--configure-compile)))
+  (unless (epurple-server--running-p)
+    (if (file-exists-p epurple-server--program)
+	(epurple-server--start)
+      (message "epurple: compiling server ...")
+      (epurple-server--configure-compile))))
 
 (provide 'epurple-server)

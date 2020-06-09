@@ -17,6 +17,7 @@
  */
 
 #include "ops.h"
+#include "emacs.h"
 
 /* eventloop */
 struct eventloop_timeout_data {
@@ -49,8 +50,7 @@ static guint eventloop_timeout_add(guint interval, GSourceFunc func, gpointer da
 	timeout_data->data = data;
 
 	memset(&timeout_data->ts, 0, sizeof(timeout_data->ts));
-	if (interval == 0)
-		interval = 1;
+	if (interval == 0) interval = 1;
 	timeout_data->ts.it_value.tv_sec = (interval / 1000);
 	timeout_data->ts.it_value.tv_nsec = (interval % 1000) * 1000000;
 
@@ -129,16 +129,27 @@ static void connect_progress(PurpleConnection *gc,const char *text, size_t step,
 static void connected(PurpleConnection *gc)
 {
 	PurpleAccount *acct = purple_connection_get_account(gc);
-	if (acct)
-		printf("Account connected: %s\n", acct->username);
+	struct epurple *epurple = epurple_get();
+	char username[STR_NAME_SIZE];
 
+	if (acct) {
+		printf("Account connected: %s\n", acct->username);
+		strncpy(username, acct->username, STR_NAME_SIZE);
+		emacs_send(epurple, "account_connected", 0, username, STR_NAME_SIZE);
+	}
 }
 
 static void disconnected(PurpleConnection *gc)
 {
 	PurpleAccount *acct = purple_connection_get_account(gc);
-	if (acct)
+	struct epurple *epurple = epurple_get();
+	char username[STR_NAME_SIZE];
+
+	if (acct) {
 		printf("Account disconnected: %s\n", acct->username);
+		strncpy(username, acct->username, STR_NAME_SIZE);
+		emacs_send(epurple, "account_disconnected", 0, username, STR_NAME_SIZE);
+	}
 }
 
 PurpleConnectionUiOps connection_ops = {
@@ -156,6 +167,16 @@ PurpleConnectionUiOps connection_ops = {
 };
 
 /* conversation */
+struct new_msg_data {
+	char username[STR_NAME_SIZE];
+	int  conv_type;
+	char conv_name[STR_NAME_SIZE];
+	char sender[STR_NAME_SIZE];
+	char msg[MAX_MSG_SIZE];
+	int  flags;
+	int  time;
+};
+
 static void create_conversation(PurpleConversation *conv)
 {
 	printf("create_conversation\n");
@@ -166,22 +187,50 @@ static void destroy_conversation(PurpleConversation *conv)
 	printf("destroy_conversation\n");
 }
 
+static void new_msg(PurpleConversation *conv, const char *who, const char *message,
+		    PurpleMessageFlags flags, time_t mtime)
+{
+	struct new_msg_data data;
+	struct epurple *epurple = epurple_get();
+
+	memset(data.username, '\0', STR_NAME_SIZE);
+	snprintf(data.username, STR_NAME_SIZE, "%s", conv->account->username);
+
+	memset(data.conv_name, '\0', STR_NAME_SIZE);
+	snprintf(data.conv_name, STR_NAME_SIZE, "%s", conv->name);
+
+	memset(data.sender, '\0', STR_NAME_SIZE);
+	snprintf(data.sender, STR_NAME_SIZE, "%s", who);
+
+	memset(data.msg, '\0', MAX_MSG_SIZE);
+	snprintf(data.msg, MAX_MSG_SIZE, "%s", message);
+
+	data.conv_type = conv->type;
+	data.flags = flags;
+	data.time = mtime;
+
+	printf("new_msg: %d %ld - %s -> %s\n", flags, mtime, who, message);
+	emacs_send(epurple, "new_msg", 0, (char *)&data, sizeof(struct new_msg_data));
+}
+
 static void write_chat(PurpleConversation *conv, const char *who, const char *message,
 		       PurpleMessageFlags flags, time_t mtime)
 {
-	printf("write_chat\n");
+	printf("write_chat: %s -> %s\n", who, message);
+	new_msg(conv, who, message, flags, mtime);
 }
 
 static void write_im(PurpleConversation *conv, const char *who, const char *message,
 		     PurpleMessageFlags flags, time_t mtime)
 {
-	printf("write_im\n");
+	printf("write_im: %s -> %s\n", who, message);
+	new_msg(conv, who, message, flags, mtime);
 }
 
 static void write_conv(PurpleConversation *conv, const char *name, const char *alias,
 		       const char *message, PurpleMessageFlags flags, time_t mtime)
 {
-	printf("write_conv\n");
+	printf("write_conv: %s (%s) -> %s\n", name, alias, message);
 }
 
 static void chat_add_users(PurpleConversation *conv, GList *cbuddies, gboolean new_arrivals)
@@ -233,9 +282,9 @@ PurpleConversationUiOps conversation_ops = {
     chat_update_user,
     present,
     has_focus,
-    NULL,
-    NULL,
-    NULL,
+    NULL, /* custom_smiley_add */
+    NULL, /* custom_smiley_write */
+    NULL, /* custom_smiley_close */
     send_confirm,
     NULL,
     NULL,

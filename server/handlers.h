@@ -21,10 +21,8 @@
 
 #include "epurple.h"
 
-#define COMMAND_NAME_SIZE 80
-
 struct handler {
-	char command[COMMAND_NAME_SIZE];
+	char command[STR_NAME_SIZE];
 	void (*func)(struct epurple *epurple, int id, char *payload, size_t len);
 };
 

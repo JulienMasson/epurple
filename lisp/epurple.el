@@ -26,31 +26,219 @@
 
 ;;; Struct
 
-(cl-defstruct epurple-account username alias protocol_id)
+(cl-defstruct epurple-account
+  name
+  face
+  username
+  alias
+  protocol-id
+  active-p
+  prpl-buffers
+  buddies
+  chats)
 
-;;; Internal Variables
+(cl-defstruct epurple-buddy
+  name
+  alias
+  server-alias
+  icon)
 
-(defvar epurple--accounts nil)
+;;; Groups
+
+(defgroup epurple nil
+  "epurple group"
+  :group 'applications)
+
+(defgroup epurple-faces nil
+  "Faces used by epurple"
+  :group 'epurple
+  :group 'faces)
+
+;;; Faces
+
+(defface epurple-facebook-face
+  '((((class color) (background light)) :foreground "DodgerBlue4" :weight bold)
+    (((class color) (background  dark)) :foreground "DodgerBlue1" :weight bold))
+  "Face for epurple facebook"
+  :group 'epurple-faces)
+
+(defface epurple-slack-face
+  '((((class color) (background light)) :foreground "purple4" :weight bold)
+    (((class color) (background  dark)) :foreground "purple2" :weight bold))
+  "Face for epurple slack"
+  :group 'epurple-faces)
+
+(defface epurple-irc-face
+  '((((class color) (background light)) :foreground "DarkSlateGrey" :weight bold)
+    (((class color) (background  dark)) :foreground "DarkCyan" :weight bold))
+  "Face for epurple irc"
+  :group 'epurple-faces)
+
+(defface epurple-whatsapp-face
+  '((((class color) (background light)) :foreground "SeaGreen4" :weight bold)
+    (((class color) (background  dark)) :foreground "SeaGreen3" :weight bold))
+  "Face for epurple whatsapp"
+  :group 'epurple-faces)
+
+(defface epurple-nick-face
+  '((((class color) (background light)) :foreground "SpringGreen4" :weight bold)
+    (((class color) (background  dark)) :foreground "SpringGreen3" :weight bold))
+  "Face for epurple nick msg"
+  :group 'epurple-faces)
+
+;;; Customization
+
+(defcustom epurple-name-alias nil
+  "An alist mapping a name to a purple username"
+  :type 'alist
+  :group 'epurple)
+
+(defcustom epurple-nick-name nil
+  "Nick name used to identified the user in epurple conversation"
+  :type 'string
+  :group 'epurple)
+
+;;; External Variables
+
+(defvar epurple-accounts nil)
 
 ;;; Internal Functions
 
+(defun epurple--find-account (name)
+  (cl-find-if (lambda (account)
+		(string= (epurple-account-name account) name))
+	      epurple-accounts))
+
+(defun epurple--find-account-by-username (username)
+  (cl-find-if (lambda (account)
+		(string= (epurple-account-username account) username))
+	      epurple-accounts))
+
+(defun epurple--find-account-by-prpl-buffer (prpl-buffer)
+  (cl-find-if (lambda (account)
+		(member prpl-buffer (epurple-account-prpl-buffers account)))
+	      epurple-accounts))
+
+(defun epurple--prompt (prompt accounts &optional all)
+  (let ((collection (mapcar (lambda (account)
+			      (with-struct-slots (name face)
+				epurple-account account
+				(propertize name 'face face)))
+			    accounts)))
+    (when (and all (> (length collection) 1))
+      (push "ALL" collection))
+    (completing-read prompt collection)))
+
+(defun epurple--inactive ()
+  (cl-remove-if (lambda (a) (epurple-account-active-p a)) epurple-accounts))
+
+(defun epurple--prompt-inactive (prompt &optional all)
+  (epurple--prompt prompt (epurple--inactive) all))
+
+(defun epurple--active ()
+  (cl-remove-if-not (lambda (a) (epurple-account-active-p a)) epurple-accounts))
+
+(defun epurple--prompt-active (prompt &optional all)
+  (epurple--prompt prompt (epurple--active) all))
+
+(defun epurple--prompt-buffers (prompt)
+  (let (collection)
+    (dolist (account epurple-accounts)
+      (with-struct-slots (face prpl-buffers) epurple-account account
+	(dolist (prpl-buffer prpl-buffers)
+	  (with-struct-slots (conv-name buffer) epurple-buffer prpl-buffer
+	    (add-to-list 'collection (cons (propertize conv-name 'face face)
+					   prpl-buffer))))))
+    (let* ((sorted-collection (cl-sort collection (lambda (mute-a mute-b)
+						    (or (not mute-a) mute-b))
+				       :key (lambda (e) (epurple-buffer-mute-p (cdr e)))))
+	   (name (completing-read prompt (mapcar #'car sorted-collection))))
+      (epurple-buffer-buffer (cdr (assq name sorted-collection))))))
+
+(defun epurple--chats-info (account chats)
+  (dolist (chat chats)
+    (push (assoc-default 'name chat) (epurple-account-chats account))))
+
+(defun epurple--buddies-info (account buddies)
+  (dolist (buddy buddies)
+    (push (alist-to-struct buddy 'epurple-buddy)
+	  (epurple-account-buddies account)))
+  (epurple-chats-get-all account (apply-partially #'epurple--chats-info account)))
+
 (defun epurple--accounts-info (accounts)
   (dolist (account accounts)
-    (push (alist-to-struct account 'epurple-account) epurple--accounts)))
+    (let ((account (alist-to-struct account 'epurple-account)))
+      (with-struct-slots (name face username protocol-id) epurple-account account
+	(let ((alias (assoc-default username epurple-name-alias))
+	      (a-face (cond ((string= protocol-id "prpl-facebook") 'epurple-facebook-face)
+			    ((string= protocol-id "prpl-slack") 'epurple-slack-face)
+			    ((string= protocol-id "prpl-irc") 'epurple-irc-face)
+			    ((string= protocol-id "prpl-hehoe-gowhatsapp") 'epurple-whatsapp-face)
+			    (t 'default))))
+	  (setq name (if alias alias username))
+	  (setq face a-face)
+	  (push account epurple-accounts))))))
+
+(defun epurple-init--done ()
+  (epurple-accounts-get-all #'epurple--accounts-info))
 
 ;;; External Functions
 
-(defun epurple-init-done ()
-  (epurple-accounts-get-all #'epurple--accounts-info))
+(defun epurple-chat (name)
+  (interactive (list (epurple--prompt-active "Chat: ")))
+  (let* ((account (epurple--find-account name))
+	 (prompt (with-struct-slots (name face) epurple-account account
+		   (format "Chat (%s): " (propertize name 'face face))))
+	 (chat (completing-read prompt (epurple-account-chats account))))
+    (epurple-create-conv account 2 chat #'epurple-buffer-new-conv)))
+
+(defun epurple-im (name)
+  (interactive (list (epurple--prompt-active "IM: ")))
+  (let* ((account (epurple--find-account name))
+	 (candidates (s-mapcar (epurple-account-buddies account) 'name))
+	 (prompt (with-struct-slots (name face) epurple-account account
+		   (format "IM (%s): " (propertize name 'face face))))
+	 (im (completing-read prompt candidates)))
+    (epurple-create-conv account 1 im #'epurple-buffer-new-conv)))
+
+(defun epurple-jump (buffer)
+  (interactive (list (epurple--prompt-buffers "Jump: ")))
+  (epurple-buffer-display buffer))
+
+(defun epurple-connect (name)
+  (interactive (list (epurple--prompt-inactive "Connect: " t)))
+  (let ((inactives (s-mapcar (epurple--inactive) 'name)))
+    (dolist (name (if (string= name "ALL") inactives (list name)))
+      (let ((account (epurple--find-account name)))
+	(epurple-account-connect account)))))
+
+(defun epurple-disconnect (name)
+  (interactive (list (epurple--prompt-active "Disconnect: " t)))
+  (let ((actives (s-mapcar (epurple--active) 'name)))
+    (dolist (name (if (string= name "ALL") actives (list name)))
+      (let ((account (epurple--find-account name)))
+	(epurple-account-disconnect account)))))
+
+(defun epurple-update-restart ()
+  (interactive)
+  (epurple-exit)
+  (epurple-server-update-init))
+
+(defun epurple-restart ()
+  (interactive)
+  (epurple-exit)
+  (epurple-init))
 
 (defun epurple-exit ()
   (interactive)
-  (setq epurple--accounts nil)
-  (epurple-server-exit))
+  (epurple-server-exit)
+  (dolist (account epurple-accounts)
+    (dolist (prpl-buffer (epurple-account-prpl-buffers account))
+      (kill-buffer (epurple-buffer-buffer prpl-buffer))))
+  (setq epurple-accounts nil))
 
 (defun epurple-init ()
   (interactive)
-  (epurple-exit)
   (epurple-server-init))
 
 (provide 'epurple)

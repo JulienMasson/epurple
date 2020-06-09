@@ -136,13 +136,18 @@ uint epurple_add_event(int fd, short events, epurple_hander handler, void *data)
 
 void epurple_remove_event(uint handle)
 {
-	if ((handle > 0) || (handle < MAX_POLL_FD)) {
+	if (handle < MAX_POLL_FD) {
 		/* close(fd); */
 		fds[handle].fd = -1;
 		fds[handle].events = 0;
 		epurple.events[handle].handler = NULL;
 		epurple.events[handle].data = NULL;
 	}
+}
+
+struct epurple *epurple_get(void)
+{
+	return &epurple;
 }
 
 int main(void)

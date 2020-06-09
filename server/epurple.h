@@ -35,7 +35,10 @@
 #include <libpurple/eventloop.h>
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
-#define MAX_POLL_FD   128
+#define STR_NAME_SIZE 80
+#define MAX_BUF_SIZE  4096
+#define MAX_MSG_SIZE  512
+#define MAX_POLL_FD   256
 
 struct epurple;
 
@@ -51,6 +54,8 @@ struct epurple {
 	int emacs_fd;
 	struct epurple_event events[MAX_POLL_FD];
 };
+
+struct epurple *epurple_get(void);
 
 uint epurple_add_event(int fd, short events, epurple_hander handler, void *data);
 

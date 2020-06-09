@@ -21,6 +21,12 @@
 
 ;;; Code:
 
+(defun struct-type (inst)
+  ;; FIXME: it should have another way to do this without prin1
+  (let ((str (cl-prin1-to-string inst)))
+    (when (string-match "#s\(\\([[:graph:]]+\\).*" str)
+      (intern (match-string 1 str)))))
+
 (defmacro with-struct-slots (spec-list type inst &rest body)
   (declare (indent defun) (debug (sexp sexp def-body)))
   (macroexp-let2 nil inst inst
@@ -46,5 +52,12 @@
 	(let ((idx (cl-struct-slot-offset struct-type slot)))
 	  (setf (aref struct idx) value))))
     struct))
+
+(defun s-mapcar (sequence slot)
+  (mapcar (lambda (inst)
+	    (let* ((type (struct-type inst))
+		   (slot (format "%s-%s" (symbol-name type) (symbol-name slot))))
+	      (funcall (intern slot) inst)))
+	  sequence))
 
 (provide 'epurple-utils)

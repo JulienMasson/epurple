@@ -23,6 +23,8 @@
 
 void emacs_handler(struct epurple *epurple, int fd, void *data);
 
-void emacs_send(struct epurple *epurple, int id, char *payload, size_t len);
+void emacs_send(struct epurple *epurple, char *command, int id, char *payload, size_t len);
+
+void emacs_ack(struct epurple *epurple, int id);
 
 #endif
