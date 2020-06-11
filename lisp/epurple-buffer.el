@@ -21,6 +21,7 @@
 
 ;;; Code:
 
+(require 'dom)
 (require 'lui)
 
 ;;; Struct
@@ -40,11 +41,56 @@
   (lui-set-prompt lui-prompt-string)
   (add-hook 'kill-buffer-hook #'epurple-buffer--killed nil t))
 
+;;; Faces
+
+(defface epurple-blockquote-face
+  '((t (:inherit font-lock-doc-face)))
+  "Face used to `>'"
+  :group 'epurple-faces)
+
+(defface epurple-inline-code-face
+  '((t (:foreground "#fb8512" :box (:line-width -1 :color "#3b3b3b"))))
+  "Face used to between ``'"
+  :group 'epurple-faces)
+
+(defface epurple-block-code-face
+  '((t (:background "#2e2e2e")))
+  "Face used to between ````'"
+  :group 'epurple-faces)
+
+;;; Customization
+
+(defcustom epurple-buffer-secs-timeout (* 5 60)
+  "Specify the number of seconds difference for which we should insert header."
+  :group 'epurple
+  :type 'number)
+
+(defcustom epurple-mrkdwn-blockquote-sign "┃"
+  "Used to display > when blockquote"
+  :group 'epurple
+  :type 'string)
+
 ;;; Internal Variables
 
 (defvar-local epurple--buffer nil)
 
+(defconst epurple-blockquote-regexp
+  "^[ \t]*\\([A-Z]?>\\)\\([ \t]*\\)\\(.+\\)$")
+
+(defconst epurple-inline-code-regexp
+  "\\(?:\\`\\|\\W\\)\\(\\(`\\)\\(\\(?:.\\)*?[^`]\\)\\(\\2\\)\\)\\(?:[^`]\\|\\'\\)")
+
+(defconst epurple-block-code-regexp
+  "\\(?:^\\|[[:blank:]]\\)\\(```\\)\\(?:\n\\)?\\(\\(.\\|\n\\)*?\\)\\(\n?```\\)[[:blank:]]*$")
+
 ;;; Internal Functions
+
+(defun epurple-buffer--find (account type name)
+  (catch 'found
+    (dolist (prpl-buffer (epurple-account-prpl-buffers account))
+      (with-struct-slots (conv-type conv-name buffer) epurple-buffer prpl-buffer
+	(when (and (= conv-type type) (string= conv-name name))
+	  (throw 'found buffer))))))
 
 (defun epurple-buffer--insert-header (sender time &optional icon)
   (let* ((ts (format-time-string lui-time-stamp-format time
@@ -60,6 +106,8 @@
       (goto-char lui-output-marker)
       (when icon-str (insert icon-str " "))
       (insert (format fmt sender ts-str))
+      (add-text-properties lui-output-marker (point) (list :epurple-time time
+							   :epurple-sender sender))
       (insert "\n")
       (set-marker lui-output-marker (point)))))
 
@@ -69,11 +117,113 @@
 	(propertize epurple-nick-name 'face 'epurple-nick-face)
       (propertize sender 'face face))))
 
+(defun epurple-buffer--html-to-text (msg)
+  (with-temp-buffer
+    (insert msg)
+    (dom-texts (libxml-parse-html-region (point-min) (point)))))
+
+(defun epurple-buffer--incf-unread-count (account buffer)
+  (when-let ((prpl-buffer (cl-find-if (lambda (prpl-buffer)
+					(eq buffer (epurple-buffer-buffer prpl-buffer)))
+				      (epurple-account-prpl-buffers account))))
+    (with-struct-slots (unread-p unread-count) epurple-buffer prpl-buffer
+      (setq unread-p t)
+      (setq unread-count (incf unread-count)))))
+
+(defun epurple-buffer--need-header-p (sender time)
+  (let (previous-time previous-sender)
+    (save-excursion
+      (goto-char lui-output-marker)
+      (while (and (or (not previous-time) (not previous-sender)) (not (bobp)))
+	(forward-line -1)
+	(when-let ((properties (text-properties-at (point))))
+	  (setq previous-time (plist-get properties :epurple-time))
+	  (setq previous-sender (plist-get properties :epurple-sender)))))
+    (if (and previous-time previous-sender)
+	(or (not (string= previous-sender sender))
+	    (> (time-to-seconds (time-subtract time previous-time))
+	       epurple-buffer-secs-timeout))
+      t)))
+
+(defun epurple-buffer--mrkdwn-blockquote ()
+  (while (re-search-forward epurple-blockquote-regexp (point-max) t)
+    (when-let ((markup-beg (match-beginning 1))
+               (markup-end (match-end 1))
+	       (beg (match-beginning 3))
+               (end (match-end 3)))
+      (put-text-property markup-beg markup-end 'display
+			 (propertize epurple-mrkdwn-blockquote-sign
+				     'face 'epurple-blockquote-face))
+      (put-text-property beg end 'face 'epurple-blockquote-face))))
+
+(defun epurple-buffer--mrkdwn-inline-code ()
+  (while (re-search-forward epurple-inline-code-regexp (point-max) t)
+    (when-let ((markup-start-beg (match-beginning 2))
+               (markup-start-end (match-end 2))
+	       (beg (match-beginning 3))
+               (end (match-end 3))
+	       (markup-end-beg (match-beginning 4))
+               (markup-end-end (match-end 4)))
+      (put-text-property markup-start-beg markup-start-end 'invisible t)
+      (put-text-property beg end 'face 'epurple-inline-code-face)
+      (put-text-property markup-end-beg markup-end-end 'invisible t))))
+
+(defun epurple-buffer--mrkdwn-block-code ()
+  (while (re-search-forward epurple-block-code-regexp (point-max) t)
+    (when-let ((markup-start-beg (match-beginning 1))
+               (markup-start-end (match-end 1))
+	       (beg (match-beginning 2))
+               (end (match-end 2))
+	       (markup-end-beg (match-beginning 4))
+               (markup-end-end (match-end 4)))
+      (put-text-property markup-start-beg markup-start-end 'invisible t)
+      (put-text-property beg end 'face 'epurple-block-code-face)
+      (put-text-property markup-end-beg markup-end-end 'invisible t))))
+
+(defun epurple-buffer--mrkdwn-fontify (text)
+  (with-temp-buffer
+    (insert text)
+    (dolist (func (list #'epurple-buffer--mrkdwn-blockquote
+			#'epurple-buffer--mrkdwn-block-code
+			#'epurple-buffer--mrkdwn-inline-code))
+      (goto-char (point-min))
+      (funcall func))
+    (buffer-string)))
+
+(defun epurple-buffer--clean-up (body)
+  ;; force new line after point
+  (replace-regexp-in-string "\\.\\s-+" ".\n" body))
+
+(defun epurple-buffer--fill-body (beg end)
+  (let ((inhibit-read-only t)
+	(fill-column lui-fill-column)
+	(cur beg))
+    (save-excursion
+      (goto-char end)
+      (save-excursion
+	(goto-char beg)
+	(while (and (re-search-forward "\n" nil t)
+		    (< (point) end))
+	  (fill-region cur (point) 'left)
+	  (setq cur (point))))
+      (set-marker lui-output-marker (point)))))
+
+(defun epurple-buffer--insert-body (body)
+  (let* ((beg (marker-position lui-output-marker))
+	 (body (epurple-buffer--clean-up body))
+	 (body (epurple-buffer--mrkdwn-fontify body)))
+    (lui-insert (propertize (concat body "\n") 'lui-format-argument 'body))
+    (epurple-buffer--fill-body beg (marker-position lui-output-marker))))
+
 (defun epurple-buffer--insert-msg (account buffer sender msg time)
-  (let ((sender (epurple-buffer--propertize-sender account sender)))
+  (unless (eq (window-buffer (selected-window)) buffer)
+    (epurple-buffer--incf-unread-count account buffer))
+  (let ((sender (epurple-buffer--propertize-sender account sender))
+	(msg (epurple-buffer--html-to-text msg)))
     (with-current-buffer buffer
-      (epurple-buffer--insert-header sender time)
-      (lui-insert (concat msg "\n")))))
+      (when (epurple-buffer--need-header-p sender time)
+	(epurple-buffer--insert-header sender time))
+      (epurple-buffer--insert-body msg))))
 
 (defun epurple-buffer--send (msg)
   (when-let ((account (epurple--find-account-by-prpl-buffer epurple--buffer)))
@@ -101,13 +251,6 @@
 	  (setf (epurple-account-prpl-buffers account)
 		(delete epurple--buffer prpl-buffers))
 	  (throw 'found nil))))))
-
-(defun epurple-buffer--find (account type name)
-  (catch 'found
-    (dolist (prpl-buffer (epurple-account-prpl-buffers account))
-      (with-struct-slots (conv-type conv-name buffer) epurple-buffer prpl-buffer
-	(when (and (= conv-type type) (string= conv-name name))
-	  (throw 'found buffer))))))
 
 (defun epurple-buffer--new (account type name)
   (let ((prpl-buffer (make-epurple-buffer))

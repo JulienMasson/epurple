@@ -119,6 +119,13 @@
 		(member prpl-buffer (epurple-account-prpl-buffers account)))
 	      epurple-accounts))
 
+(defun epurple--find-prpl-buffer (buffer)
+  (catch 'found
+    (dolist (account epurple-accounts)
+      (dolist (prpl-buffer (epurple-account-prpl-buffers account))
+	(when (eq (epurple-buffer-buffer prpl-buffer) buffer)
+	  (throw 'found prpl-buffer))))))
+
 (defun epurple--prompt (prompt accounts &optional all)
   (let ((collection (mapcar (lambda (account)
 			      (with-struct-slots (name face)
@@ -141,14 +148,18 @@
 (defun epurple--prompt-active (prompt &optional all)
   (epurple--prompt prompt (epurple--active) all))
 
-(defun epurple--prompt-buffers (prompt)
+(defun epurple--prompt-buffers (prompt &optional only-unreads)
   (let (collection)
     (dolist (account epurple-accounts)
       (with-struct-slots (face prpl-buffers) epurple-account account
 	(dolist (prpl-buffer prpl-buffers)
-	  (with-struct-slots (conv-name buffer) epurple-buffer prpl-buffer
-	    (add-to-list 'collection (cons (propertize conv-name 'face face)
-					   prpl-buffer))))))
+	  (with-struct-slots (conv-name buffer unread-p unread-count)
+	    epurple-buffer prpl-buffer
+	    (unless (and only-unreads (not unread-p))
+	      (let ((str (if (zerop unread-count) conv-name
+			   (format "%s (%s)" conv-name unread-count))))
+		(add-to-list 'collection (cons (propertize str 'face face)
+					       prpl-buffer))))))))
     (let* ((sorted-collection (cl-sort collection (lambda (mute-a mute-b)
 						    (or (not mute-a) mute-b))
 				       :key (lambda (e) (epurple-buffer-mute-p (cdr e)))))
@@ -182,6 +193,23 @@
 (defun epurple-init--done ()
   (epurple-accounts-get-all #'epurple--accounts-info))
 
+(defun epurple--mark-buffer-as-read (buffer)
+  (when-let ((prpl-buffer (epurple--find-prpl-buffer buffer)))
+    (with-struct-slots (unread-p unread-count) epurple-buffer prpl-buffer
+      (setq unread-p nil)
+      (setq unread-count 0))))
+
+(defun epurple--select-window (old-fn &rest args)
+  (let ((prev-buffer (current-buffer))
+	next-buffer)
+    (apply old-fn args)
+    (setq next-buffer (current-buffer))
+    ;; mark as read
+    (with-current-buffer next-buffer
+      (when (derived-mode-p 'lui-mode)
+	(epurple--mark-buffer-as-read next-buffer)))))
+(advice-add 'select-window :around #'epurple--select-window)
+
 ;;; External Functions
 
 (defun epurple-chat (name)
@@ -201,8 +229,18 @@
 	 (im (completing-read prompt candidates)))
     (epurple-create-conv account 1 im #'epurple-buffer-new-conv)))
 
+(defun epurple-mute-toggle (buffer)
+  (interactive (list (epurple--prompt-buffers "Toggle Mute: ")))
+  (when-let ((prpl-buffer (epurple--find-prpl-buffer buffer)))
+    (with-struct-slots (mute-p) epurple-buffer prpl-buffer
+      (setq mute-p (not mute-p)))))
+
 (defun epurple-jump (buffer)
   (interactive (list (epurple--prompt-buffers "Jump: ")))
+  (epurple-buffer-display buffer))
+
+(defun epurple-unread (buffer)
+  (interactive (list (epurple--prompt-buffers "Unread: " t)))
   (epurple-buffer-display buffer))
 
 (defun epurple-connect (name)
@@ -221,21 +259,22 @@
 
 (defun epurple-update-restart ()
   (interactive)
-  (epurple-exit)
+  (epurple-exit t)
   (epurple-server-update-init))
 
 (defun epurple-restart ()
   (interactive)
-  (epurple-exit)
+  (epurple-exit t)
   (epurple-init))
 
-(defun epurple-exit ()
-  (interactive)
-  (epurple-server-exit)
-  (dolist (account epurple-accounts)
-    (dolist (prpl-buffer (epurple-account-prpl-buffers account))
-      (kill-buffer (epurple-buffer-buffer prpl-buffer))))
-  (setq epurple-accounts nil))
+(defun epurple-exit (confirm)
+  (interactive (list (yes-or-no-p "Do you really want to exit ?")))
+  (when confirm
+    (epurple-server-exit)
+    (dolist (account epurple-accounts)
+      (dolist (prpl-buffer (epurple-account-prpl-buffers account))
+	(kill-buffer (epurple-buffer-buffer prpl-buffer))))
+    (setq epurple-accounts nil)))
 
 (defun epurple-init ()
   (interactive)
