@@ -217,9 +217,13 @@ static guint eventloop_timeout_add(guint interval, GSourceFunc func, gpointer da
 	timeout_data->data = data;
 
 	memset(&timeout_data->ts, 0, sizeof(timeout_data->ts));
-	if (interval == 0) interval = 1;
-	timeout_data->ts.it_value.tv_sec = (interval / 1000);
-	timeout_data->ts.it_value.tv_nsec = (interval % 1000) * 1000000;
+	if (interval == 0) {
+		timeout_data->ts.it_value.tv_sec = 0;
+		timeout_data->ts.it_value.tv_nsec = 1;
+	} else {
+		timeout_data->ts.it_value.tv_sec = (interval / 1000);
+		timeout_data->ts.it_value.tv_nsec = (interval % 1000) * 1000000;
+	}
 
 	handle = epurple_add_event(fd, POLLIN, eventloop_timeout_handler, timeout_data);
 	timerfd_settime(fd, 0, &timeout_data->ts, NULL);
