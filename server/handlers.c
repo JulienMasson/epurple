@@ -199,6 +199,16 @@ static void create_conv_handler(struct epurple *epurple, int id, char *payload, 
 	conv = purple_conversation_new(conv_data->conv_type, acct, conv_data->conv_name);
 	if (!conv) return;
 
+	if (conv_data->conv_type == PURPLE_CONV_TYPE_CHAT) {
+		PurpleConnection *gc = purple_account_get_connection(acct);
+		if (!gc) return;
+
+		PurpleChat *chat = purple_blist_find_chat(acct, conv_data->conv_name);
+		if (!chat) return;
+
+		serv_join_chat(gc, purple_chat_get_components(chat));
+	}
+
 	emacs_ack(epurple, id);
 }
 
