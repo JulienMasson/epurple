@@ -58,6 +58,16 @@
   "Face used to between ````'"
   :group 'epurple-faces)
 
+(defface epurple-buddy-offline-face
+  '((t (:foreground "#696969")))
+  "Face used when buddy is offline"
+  :group 'epurple-faces)
+
+(defface epurple-buddy-typing-face
+  '((t :inherit warning))
+  "Face used when buddy is offline"
+  :group 'epurple-faces)
+
 ;;; Customization
 
 (defcustom epurple-buffer-secs-timeout (* 5 60)
@@ -83,6 +93,11 @@
 (defconst epurple-block-code-regexp
   "\\(?:^\\|[[:blank:]]\\)\\(```\\)\\(?:\n\\)?\\(\\(.\\|\n\\)*?\\)\\(\n?```\\)[[:blank:]]*$")
 
+(defconst epurple--icons-dir (expand-file-name (concat (file-name-directory load-file-name)
+							      "../icons/")))
+(defconst epurple--icons-available (concat epurple--icons-dir "available.png"))
+(defconst epurple--icons-offline (concat epurple--icons-dir "offline.png"))
+
 ;;; Internal Functions
 
 (defun epurple-buffer--find (account type name)
@@ -92,7 +107,7 @@
 	(when (and (= conv-type type) (string= conv-name name))
 	  (throw 'found buffer))))))
 
-(defun epurple-buffer--insert-header (sender time &optional icon)
+(defun epurple-buffer--insert-header (sender time icon)
   (let* ((ts (format-time-string lui-time-stamp-format time
                                  lui-time-stamp-zone))
 	 (ts-str (propertize ts 'face 'lui-time-stamp-face))
@@ -110,6 +125,14 @@
 							   :epurple-sender sender))
       (insert "\n")
       (set-marker lui-output-marker (point)))))
+
+(defun epurple-buffer--find-icon (account sender)
+  (with-struct-slots (alias) epurple-account account
+    (when-let* ((buddy (if (string= "(null)" sender)
+			  (epurple--find-buddy account alias)
+			 (epurple--find-buddy account sender)))
+		(icon (epurple-buddy-icon buddy)))
+      (create-image icon nil nil :scale 0.15 :ascent 80))))
 
 (defun epurple-buffer--propertize-sender (account sender)
   (with-struct-slots (alias face) epurple-account account
@@ -219,15 +242,38 @@
   (unless (eq (window-buffer (selected-window)) buffer)
     (epurple-buffer--incf-unread-count account buffer))
   (let ((sender (epurple-buffer--propertize-sender account sender))
+	(icon (epurple-buffer--find-icon account sender))
 	(msg (epurple-buffer--html-to-text msg)))
     (with-current-buffer buffer
       (when (epurple-buffer--need-header-p sender time)
-	(epurple-buffer--insert-header sender time))
+	(epurple-buffer--insert-header sender time icon))
       (epurple-buffer--insert-body msg))))
 
 (defun epurple-buffer--send (msg)
   (when-let ((account (epurple--find-account-by-prpl-buffer epurple--buffer)))
     (epurple-send-msg account epurple--buffer msg)))
+
+(defun epurple-buffer--im-header-line (account buddy-name)
+  (when-let ((buddy (epurple--find-buddy account buddy-name)))
+    (with-struct-slots (name signed-on typing-p) epurple-buddy buddy
+      (let* ((name-face (if signed-on (epurple-account-face account)
+			  'epurple-buddy-offline-face))
+	     (name-str (propertize name 'face name-face))
+	     (name-length (length name-str))
+	     (typing-str (if typing-p
+			     (propertize "Typing ..." 'face 'epurple-buddy-typing-face)
+			   ""))
+	     (typing-length (if typing-p (length typing-str) 0))
+	     (icon-image (create-image (if signed-on
+					   epurple--icons-available
+					 epurple--icons-offline)
+				       nil nil :ascent 80))
+	     (icon-length 2)
+	     (fmt (format "%%%ds %%s" (+ (/ lui-fill-column 2) (/ (+ name-length icon-length) 2)))))
+	(setq header-line-format (format fmt (concat (propertize "x" 'display icon-image)
+						     " " name-str)
+					 typing-str))
+	(force-mode-line-update)))))
 
 (defun epurple-buffer--setup (account prpl-buffer)
   (with-struct-slots (conv-type conv-name) epurple-buffer prpl-buffer
@@ -235,8 +281,11 @@
 	   (buffer-name (format "*%s: %s*" account-name conv-name)))
       (with-current-buffer (get-buffer-create buffer-name)
 	(epurple-mode)
-	(cond ((= conv-type 1) (setq mode-name "Epurple IM"))
-	      ((= conv-type 2) (setq mode-name "Epurple Chat")))
+	(cond ((= conv-type 1)
+	       (epurple-buffer--im-header-line account conv-name)
+	       (setq mode-name "Epurple IM"))
+	      ((= conv-type 2)
+	       (setq mode-name "Epurple Chat")))
 	(force-mode-line-update)
 	(setq lui-input-function #'epurple-buffer--send)
 	(goto-char (point-max))
@@ -269,6 +318,12 @@
   (if (get-buffer-window-list buffer)
       (pop-to-buffer buffer)
     (switch-to-buffer-other-window buffer)))
+
+(defun epurple-buffer-update (account conv-name)
+  ;; fow now only IM conv are updated
+  (when-let ((buffer (epurple-buffer--find account 1 conv-name)))
+    (with-current-buffer buffer
+      (epurple-buffer--im-header-line account conv-name))))
 
 (defun epurple-buffer-new-msg (data)
   (let-alist data

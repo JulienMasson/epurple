@@ -37,7 +37,11 @@
 (defvar epurple--handlers
   '(("account_connected"    . epurple-account-connected)
     ("account_disconnected" . epurple-account-disconnected)
-    ("new_msg"              . epurple-new-msg)))
+    ("buddy_typing_update"  . epurple-buddy-typing-update)
+    ("buddy_signed_on_off"  . epurple-buddy-signed-on-off)
+    ("buddy_icon_update"    . epurple-buddy-icon-update)
+    ("new_msg"              . epurple-new-msg)
+    ("purple_init_done"     . epurple-purple-init-done)))
 
 ;;; Internal Functions
 
@@ -59,8 +63,12 @@
 ;;; External Functions
 
 ;; purple
-(defun epurple-purple-init (cb)
-  (epurple--send "purple_init" nil nil `(lambda (p) (funcall #',cb))))
+(defun epurple-purple-init ()
+  (epurple--send "purple_init" nil nil))
+
+(defun epurple-purple-init-done (payload)
+  (epurple-accounts-get-all #'epurple--accounts-info)
+  0)
 
 ;; accounts
 (defvar epurple--account-spec '((username    strz 80)
@@ -74,7 +82,8 @@
 	 (length (/ (length payload) account-length))
 	 (spec `((accounts repeat ,length (struct epurple--account-spec))))
 	 (decoded (bindat-unpack spec payload)))
-    (funcall cb (assoc-default 'accounts decoded))))
+    (funcall cb (assoc-default 'accounts decoded))
+    (length payload)))
 
 (defun epurple-accounts-get-all (cb)
   (epurple--send "accounts_get_all" nil nil
@@ -94,7 +103,8 @@
     (when-let ((account (epurple--find-account-by-username username)))
       (setf (epurple-account-active-p account) t)
       (epurple-buddies-get-all account (apply-partially #'epurple--buddies-info
-							account)))))
+							account)))
+    (bindat-length spec '((username "")))))
 
 (defun epurple-account-disconnect (account)
   (with-struct-slots (username alias protocol-id) epurple-account account
@@ -110,23 +120,24 @@
     (when-let ((account (epurple--find-account-by-username username)))
       (with-struct-slots (active-p buddies) epurple-account account
 	(setq active-p nil)
-	(setq buddies nil)))))
+	(setq buddies nil)
+	(setq chats nil)))
+    (bindat-length spec '((username "")))))
 
 ;; buddies
 (defvar epurple--buddy-spec '((name         strz 80)
 			      (alias        strz 80)
-			      (server-alias strz 80)
-			      (icon         strz 80)))
+			      (server-alias strz 80)))
 
 (defun epurple-buddies-get-all-cb (cb payload)
   (let* ((buddy-length (bindat-length epurple--buddy-spec '((name "")
 							    (alias "")
-							    (server-alias "")
-						    	    (icon ""))))
+							    (server-alias ""))))
 	 (length (/ (length payload) buddy-length))
 	 (spec `((buddys repeat ,length (struct epurple--buddy-spec))))
 	 (decoded (bindat-unpack spec payload)))
-    (funcall cb (assoc-default 'buddys decoded))))
+    (funcall cb (assoc-default 'buddys decoded))
+    (length payload)))
 
 (defun epurple-buddies-get-all (account cb)
   (with-struct-slots (username alias protocol-id) epurple-account account
@@ -136,6 +147,43 @@
       (epurple--send "buddies_get_all" payload 'epurple--account-spec
 		     (apply-partially #'epurple-buddies-get-all-cb cb)))))
 
+(defun epurple-buddy-typing-update (payload)
+  (let* ((spec '((account-username strz 80)
+		 (buddy-name       strz 80)
+		 (conv-name        strz 80)
+		 (typing           u32r)))
+	 (decoded (bindat-unpack spec payload)))
+    (let-alist decoded
+      (when-let* ((account (epurple--find-account-by-username .account-username))
+		  (buddy (epurple--find-buddy account .buddy-name)))
+	(setf (epurple-buddy-typing-p buddy) (not (zerop .typing)))
+	(epurple-buffer-update account .conv-name)))
+    (bindat-length spec '((account-username "") (buddy-name "")
+			  (conv-name "") (typing 0)))))
+
+(defun epurple-buddy-signed-on-off (payload)
+  (let* ((spec '((account-username strz 80)
+		 (buddy-name       strz 80)
+		 (online           u32r)))
+	 (decoded (bindat-unpack spec payload)))
+    (let-alist decoded
+      (when-let* ((account (epurple--find-account-by-username .account-username))
+		  (buddy (epurple--find-buddy account .buddy-name)))
+	(setf (epurple-buddy-signed-on buddy) (not (zerop .online)))
+	(epurple-buffer-update account .buddy-name)))
+    (bindat-length spec '((account-username "") (buddy-name "") (online 0)))))
+
+(defun epurple-buddy-icon-update (payload)
+  (let* ((spec '((account-username strz 80)
+		 (buddy-name       strz 80)
+		 (icon             strz 80)))
+	 (decoded (bindat-unpack spec payload)))
+    (let-alist decoded
+      (when-let* ((account (epurple--find-account-by-username .account-username))
+		  (buddy (epurple--find-buddy account .buddy-name)))
+	(setf (epurple-buddy-icon buddy) .icon)))
+    (bindat-length spec '((account-username "") (buddy-name "") (icon "")))))
+
 ;; chats
 (defvar epurple--chat-spec '((name strz 80)))
 
@@ -144,7 +192,8 @@
 	 (length (/ (length payload) chat-length))
 	 (spec `((chats repeat ,length (struct epurple--chat-spec))))
 	 (decoded (bindat-unpack spec payload)))
-    (funcall cb (assoc-default 'chats decoded))))
+    (funcall cb (assoc-default 'chats decoded))
+    (length payload)))
 
 (defun epurple-chats-get-all (account cb)
   (with-struct-slots (username alias protocol-id) epurple-account account
@@ -167,7 +216,8 @@
 		     (conv-type   . ,conv-type)
 		     (conv-name   . ,conv-name))))
       (epurple--send "create_conv" payload 'epurple--conv-spec
-		      `(lambda (p) (funcall #',cb ,account ,conv-type ,conv-name))))))
+		     `(lambda (p) (funcall #',cb ,account ,conv-type ,conv-name)
+			0)))))
 
 ;; msg
 (defvar epurple--send-msg-spec '((username    strz 80)
@@ -195,20 +245,30 @@
 		 (flags      u32r)
 		 (time       u32r)))
 	 (decoded (bindat-unpack spec payload)))
-    (epurple-buffer-new-msg decoded)))
+    (epurple-buffer-new-msg decoded)
+    (bindat-length spec '((username "") (conv-type 0) (conv-name "") (sender "")
+			  (msg "") (flags 0) (time 0)))))
 
 ;; handler
-(defun epurple-commands-handler (str)
-  (let* ((header (substring str 0 epurple--header-length))
-	 (payload (substring str epurple--header-length (length str)))
-	 (decoded (bindat-unpack epurple--header-spec header)))
-    (let-alist decoded
-      (if-let ((resp (assoc-default .id epurple--queue)))
-	  (progn
-	    (funcall resp payload)
-	    (setq epurple--queue (assq-delete-all .id epurple--queue)))
-	(if-let ((handler (assoc-default .command epurple--handlers)))
-	    (funcall handler payload)
-	  (message "Unknown command: %s" .command))))))
+(defun epurple-commands-handler (data)
+  (let (payload-length)
+    (catch 'remaining-data
+      (while data
+	(let* ((header (substring data 0 epurple--header-length))
+	       (payload (substring data epurple--header-length (length data)))
+	       (decoded (bindat-unpack epurple--header-spec header)))
+	  (let-alist decoded
+	    (if-let ((resp (assoc-default .id epurple--queue)))
+		(progn
+		  (setq payload-length (funcall resp payload))
+		  (setq epurple--queue (assq-delete-all .id epurple--queue)))
+	      (if-let ((handler (assoc-default .command epurple--handlers)))
+		  (setq payload-length (funcall handler payload))
+		(throw 'remaining-data data))))
+	  (if (= (+ epurple--header-length payload-length) (length data))
+	      (setq data nil)
+	    (setq data (substring data (+ epurple--header-length payload-length)
+				  (length data)))))))
+    data))
 
 (provide 'epurple-commands)

@@ -19,6 +19,173 @@
 #include "ops.h"
 #include "emacs.h"
 
+/* core */
+static void purple_disconnect_all(void)
+{
+	PurpleAccount *account;
+	GList *acl;
+
+	for (acl = purple_accounts_get_all(); acl; acl = acl->next) {
+		account = acl->data;
+		if (!account) continue;
+		purple_account_set_enabled(account, EPURPLE_UI, FALSE);
+	}
+}
+
+static void chat_buddy_joined(PurpleConversation *conv, const char *user,
+			      PurpleConvChatBuddyFlags flags, gboolean new_arrival, void *data)
+{
+	printf("chat_buddy_joined\n");
+}
+
+static void chat_buddy_left(PurpleConversation *conv, const char *user, const char *reason,
+			    void *data)
+{
+	printf("chat_buddy_left\n");
+}
+
+struct buddy_typing_update_data {
+	char account_username[STR_NAME_SIZE];
+	char buddy_name[STR_NAME_SIZE];
+	char conv_name[STR_NAME_SIZE];
+	int  typing;
+};
+
+static void buddy_typing_update(PurpleAccount *account, const char *name, void *data)
+{
+	struct epurple *epurple = (struct epurple *)data;
+	struct buddy_typing_update_data buddy_typing_update_data;
+	PurpleConversation *conv;
+	PurpleTypingState state;
+	int typing = 0;
+
+	conv = purple_find_conversation_with_account(PURPLE_CONV_TYPE_IM, name, account);
+	if (!conv) return;
+
+	state = purple_conv_im_get_typing_state(PURPLE_CONV_IM(conv));
+	if (state == PURPLE_TYPING)
+		typing = 1;
+
+	memset(buddy_typing_update_data.account_username, '\0', STR_NAME_SIZE);
+	strncpy(buddy_typing_update_data.account_username, account->username, STR_NAME_SIZE);
+
+	memset(buddy_typing_update_data.buddy_name, '\0', STR_NAME_SIZE);
+	strncpy(buddy_typing_update_data.buddy_name, name, STR_NAME_SIZE);
+
+	memset(buddy_typing_update_data.conv_name, '\0', STR_NAME_SIZE);
+	strncpy(buddy_typing_update_data.conv_name, conv->name, STR_NAME_SIZE);
+
+	buddy_typing_update_data.typing = typing;
+
+	printf("buddy_typing_update: %s -> %d\n", name, typing);
+	emacs_send(epurple, "buddy_typing_update", 0, (char *)&buddy_typing_update_data,
+		   sizeof(struct buddy_typing_update_data));
+}
+
+struct buddy_signed_on_off_data {
+	char account_username[STR_NAME_SIZE];
+	char buddy_name[STR_NAME_SIZE];
+	int  available;
+};
+
+static void buddy_signed_on_off(PurpleBuddy* buddy, void *data)
+{
+	struct epurple *epurple = (struct epurple *)data;
+	struct buddy_signed_on_off_data buddy_signed_on_off_data;
+	PurplePresence *presence;
+
+	presence = purple_buddy_get_presence(buddy);
+	if (!presence) return;
+
+	memset(buddy_signed_on_off_data.account_username, '\0', STR_NAME_SIZE);
+	strncpy(buddy_signed_on_off_data.account_username, buddy->account->username, STR_NAME_SIZE);
+
+	memset(buddy_signed_on_off_data.buddy_name, '\0', STR_NAME_SIZE);
+	strncpy(buddy_signed_on_off_data.buddy_name, buddy->name, STR_NAME_SIZE);
+
+	buddy_signed_on_off_data.available = purple_presence_is_available(presence);
+
+	printf("buddy_signed_on_off: %s -> %d\n", buddy->name, buddy_signed_on_off_data.available);
+	emacs_send(epurple, "buddy_signed_on_off", 0, (char *)&buddy_signed_on_off_data,
+		   sizeof(struct buddy_signed_on_off_data));
+}
+
+struct buddy_icon_update_data {
+	char account_username[STR_NAME_SIZE];
+	char buddy_name[STR_NAME_SIZE];
+	char icon[STR_NAME_SIZE];
+};
+
+static void buddy_icon_update(PurpleBuddy *buddy, void *data)
+{
+	struct epurple *epurple = (struct epurple *)data;
+	struct buddy_icon_update_data buddy_icon_update_data;
+	char *icon = NULL;
+
+	memset(buddy_icon_update_data.account_username, '\0', STR_NAME_SIZE);
+	strncpy(buddy_icon_update_data.account_username, buddy->account->username, STR_NAME_SIZE);
+
+	memset(buddy_icon_update_data.buddy_name, '\0', STR_NAME_SIZE);
+	strncpy(buddy_icon_update_data.buddy_name, buddy->name, STR_NAME_SIZE);
+
+	memset(buddy_icon_update_data.icon, '\0',  STR_NAME_SIZE);
+	if (buddy->icon)
+		icon = purple_buddy_icon_get_full_path(buddy->icon);
+	if (icon)
+		strncpy(buddy_icon_update_data.icon, icon, STR_NAME_SIZE);
+
+	printf("buddy_icon_update: %s\n", buddy_icon_update_data.buddy_name);
+	emacs_send(epurple, "buddy_icon_update", 0, (char *)&buddy_icon_update_data,
+		   sizeof(struct buddy_icon_update_data));
+}
+
+static void ui_init(void)
+{
+	struct epurple *epurple = epurple_get();
+	void *conv_instance, *blist_instance;
+	static int handle;
+
+	purple_disconnect_all();
+
+	/* connections */
+	purple_connections_set_ui_ops(&connection_ops);
+
+	/* conversations */
+	purple_conversations_set_ui_ops(&conversation_ops);
+	conv_instance = purple_conversations_get_handle();
+	purple_signal_connect(conv_instance, "buddy-typing", &handle,
+			      PURPLE_CALLBACK(buddy_typing_update), epurple);
+	purple_signal_connect(conv_instance, "buddy-typing-stopped", &handle,
+			      PURPLE_CALLBACK(buddy_typing_update), epurple);
+	purple_signal_connect(conv_instance, "chat-buddy-joined", &handle,
+			      PURPLE_CALLBACK(chat_buddy_joined), epurple);
+	purple_signal_connect(conv_instance, "chat-buddy-left", &handle,
+			      PURPLE_CALLBACK(chat_buddy_left), epurple);
+
+	/* blist */
+	purple_blist_set_ui_ops(&blist_ops);
+	blist_instance = purple_blist_get_handle();
+	purple_signal_connect(blist_instance, "buddy-signed-on", &handle,
+			      PURPLE_CALLBACK(buddy_signed_on_off), epurple);
+	purple_signal_connect(blist_instance, "buddy-signed-off", &handle,
+			      PURPLE_CALLBACK(buddy_signed_on_off), epurple);
+	purple_signal_connect(blist_instance, "buddy-icon-changed", &handle,
+			      PURPLE_CALLBACK(buddy_icon_update), epurple);
+
+	emacs_send(epurple, "purple_init_done", 0, NULL, 0);
+}
+
+PurpleCoreUiOps core_ops = {
+	NULL, /* ui_prefs_init */
+	NULL, /* debug_ui_init */
+	ui_init,
+	NULL, /* quit */
+	NULL, /* get_ui_info */
+	NULL,
+	NULL,
+	NULL
+};
+
 /* eventloop */
 struct eventloop_timeout_data {
 	GSourceFunc func;
@@ -110,8 +277,8 @@ PurpleEventLoopUiOps eventloop_ops = {
 	eventloop_timeout_remove,
 	eventloop_input_add,
 	eventloop_input_remove,
-	NULL,
-	NULL,
+	NULL, /* input_get_error */
+	NULL, /* timeout_add_seconds */
 	NULL,
 	NULL,
 	NULL
@@ -156,11 +323,11 @@ PurpleConnectionUiOps connection_ops = {
     connect_progress,
     connected,
     disconnected,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
+    NULL, /* notice */
+    NULL, /* report_disconnect */
+    NULL, /* network_connected */
+    NULL, /* network_disconnected */
+    NULL, /* report_disconnect_reason */
     NULL,
     NULL,
     NULL
@@ -290,4 +457,23 @@ PurpleConversationUiOps conversation_ops = {
     NULL,
     NULL,
     NULL
+};
+
+/* blist */
+PurpleBlistUiOps blist_ops =
+{
+	NULL, /* new_list */
+	NULL, /* new_node */
+	NULL, /* show */
+	NULL, /* update */
+	NULL, /* remove */
+	NULL, /* destroy */
+	NULL, /* set_visible */
+	NULL, /* request_add_buddy */
+	NULL, /* request_add_chat */
+	NULL, /* request_add_group */
+	NULL, /* save_node */
+	NULL, /* remove_node */
+	NULL, /* save_account */
+	NULL
 };

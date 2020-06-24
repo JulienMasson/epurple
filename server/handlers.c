@@ -20,51 +20,28 @@
 #include "handlers.h"
 #include "ops.h"
 
-#define EPURPLE_UI "epurple"
-
 /* purple */
-static void purple_disconnect_all(void)
-{
-	PurpleAccount *account;
-	GList *acl;
-
-	for (acl = purple_accounts_get_all(); acl; acl = acl->next) {
-		account = acl->data;
-		if (!account) continue;
-		purple_account_set_enabled(account, EPURPLE_UI, FALSE);
-	}
-}
-
 static void purple_init_handler(struct epurple *epurple, int id, char *payload, size_t len)
 {
 	char path[256];
-	int success = 1;
 
 	purple_debug_set_enabled(FALSE);
 
+	purple_core_set_ui_ops(&core_ops);
 	purple_eventloop_set_ui_ops(&eventloop_ops);
-	purple_connections_set_ui_ops(&connection_ops);
-	purple_conversations_set_ui_ops(&conversation_ops);
 
 	if (purple_get_core()) {
 		printf("libpurple already initialised\n");
-		goto out;
+		return;
 	}
 
 	snprintf(path, 256, "%splugins", purple_user_dir());
 	purple_plugins_add_search_path(path);
 
-	if (purple_core_init(EPURPLE_UI) == FALSE) {
+	if (purple_core_init(EPURPLE_UI) == FALSE)
 		perror("Failed to init purple core");
-		success = 0;
-		goto out;
-	}
-	purple_set_blist(purple_blist_new());
-	purple_disconnect_all();
-
-out:
-	if (success)
-		emacs_ack(epurple, id);
+	else
+		purple_set_blist(purple_blist_new());
 }
 
 /* accounts */
@@ -126,7 +103,6 @@ struct buddy_data {
 	char name[STR_NAME_SIZE];
 	char alias[STR_NAME_SIZE];
 	char server_alias[STR_NAME_SIZE];
-	char icon[STR_NAME_SIZE];
 };
 
 static void buddies_get_all_handler(struct epurple *epurple, int id, char *payload, size_t len)
@@ -138,7 +114,6 @@ static void buddies_get_all_handler(struct epurple *epurple, int id, char *paylo
 	PurpleBuddy *buddy;
 	PurpleAccount *acct;
 	int count = 0;
-	char *icon = NULL;
 
 	acct = purple_accounts_find(account->username, account->protocol_id);
 	if (!acct) return;
@@ -163,12 +138,6 @@ static void buddies_get_all_handler(struct epurple *epurple, int id, char *paylo
 		memset(buddy_data->server_alias, '\0',  STR_NAME_SIZE);
 		if (buddy->server_alias)
 			strncpy(buddy_data->server_alias, buddy->server_alias, STR_NAME_SIZE);
-
-		memset(buddy_data->icon, '\0',  STR_NAME_SIZE);
-		if (buddy->icon)
-			icon = purple_buddy_icon_get_full_path(buddy->icon);
-		if (icon)
-			strncpy(buddy_data->icon, icon, STR_NAME_SIZE);
 	}
 	g_slist_free(buddies);
 

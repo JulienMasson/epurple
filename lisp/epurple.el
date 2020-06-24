@@ -41,7 +41,10 @@
   name
   alias
   server-alias
-  icon)
+  icon
+  status
+  signed-on
+  typing-p)
 
 ;;; Groups
 
@@ -126,6 +129,11 @@
 	(when (eq (epurple-buffer-buffer prpl-buffer) buffer)
 	  (throw 'found prpl-buffer))))))
 
+(defun epurple--find-buddy (account name)
+  (cl-find-if (lambda (buddy)
+		(string= (epurple-buddy-name buddy) name))
+	      (epurple-account-buddies account)))
+
 (defun epurple--prompt (prompt accounts &optional all)
   (let ((collection (mapcar (lambda (account)
 			      (with-struct-slots (name face)
@@ -166,6 +174,15 @@
 	   (name (completing-read prompt (mapcar #'car sorted-collection))))
       (epurple-buffer-buffer (cdr (assq name sorted-collection))))))
 
+(defun epurple--prompt-buddies (account prompt)
+  (let (onlines offlines)
+    (dolist (buddy (epurple-account-buddies account))
+      (with-struct-slots (name signed-on) epurple-buddy buddy
+	(if signed-on
+	    (push (propertize name 'face 'success) onlines)
+	  (push (propertize name 'face 'error) offlines))))
+    (completing-read prompt (append onlines offlines))))
+
 (defun epurple--chats-info (account chats)
   (dolist (chat chats)
     (push (assoc-default 'name chat) (epurple-account-chats account))))
@@ -189,9 +206,6 @@
 	  (setq name (if alias alias username))
 	  (setq face a-face)
 	  (push account epurple-accounts))))))
-
-(defun epurple-init--done ()
-  (epurple-accounts-get-all #'epurple--accounts-info))
 
 (defun epurple--mark-buffer-as-read (buffer)
   (when-let ((prpl-buffer (epurple--find-prpl-buffer buffer)))
@@ -223,10 +237,9 @@
 (defun epurple-im (name)
   (interactive (list (epurple--prompt-active "IM: ")))
   (let* ((account (epurple--find-account name))
-	 (candidates (s-mapcar (epurple-account-buddies account) 'name))
 	 (prompt (with-struct-slots (name face) epurple-account account
-		   (format "IM (%s): " (propertize name 'face face))))
-	 (im (completing-read prompt candidates)))
+		  (format "IM (%s): " (propertize name 'face face))))
+	 (im (epurple--prompt-buddies account prompt)))
     (epurple-create-conv account 1 im #'epurple-buffer-new-conv)))
 
 (defun epurple-mute-toggle (buffer)

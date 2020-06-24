@@ -33,9 +33,8 @@
 
 ;;; Internal Variables
 
-(defconst epurple-server--src-dir (expand-file-name
-				   (concat (file-name-directory load-file-name)
-					   "../server/")))
+(defconst epurple-server--src-dir (expand-file-name (concat (file-name-directory load-file-name)
+							    "../server/")))
 
 (defconst epurple-server--program (concat epurple-server--src-dir "build/epurple"))
 
@@ -52,9 +51,10 @@
 
 (defun epurple-server--filter (process str)
   (with-current-buffer (process-buffer process)
-    (let ((inhibit-read-only t))
-      (goto-char (point-max))
-      (insert str))))
+    (save-excursion
+      (let ((inhibit-read-only t))
+	(goto-char (point-max))
+	(insert str)))))
 
 ;; compilation
 (defun epurple-server--sentinel-compilation (process event)
@@ -93,9 +93,8 @@
 (defun epurple-server--filter-socket (proc str)
   (with-struct-slots (pending-data) epurple-server epurple-server
     (setq pending-data (concat pending-data str))
-    (unless (>= (length str) 4096)
-      (epurple-commands-handler pending-data)
-      (setq pending-data nil))))
+    (unless (= (length str) 4096)
+      (setq pending-data (epurple-commands-handler pending-data)))))
 
 (defun epurple-server--socket-start ()
   (let* ((default-directory epurple-server--src-dir)
@@ -109,7 +108,7 @@
 		   :sentinel #'epurple-server--sentinel)))
     (set-process-coding-system process 'binary 'binary)
     (setf (epurple-server-socket epurple-server) process)
-    (epurple-purple-init #'epurple-init--done)))
+    (epurple-purple-init)))
 
 ;; server
 (defun epurple-server--filter-process (proc str)

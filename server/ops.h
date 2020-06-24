@@ -21,8 +21,10 @@
 
 #include "epurple.h"
 
+extern PurpleCoreUiOps core_ops;
 extern PurpleEventLoopUiOps eventloop_ops;
 extern PurpleConnectionUiOps connection_ops;
 extern PurpleConversationUiOps conversation_ops;
+extern PurpleBlistUiOps blist_ops;
 
 #endif
