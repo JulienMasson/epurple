@@ -22,7 +22,6 @@
 ;;; Code:
 
 (require 'bindat)
-(require 'epurple-buffer)
 
 ;;; Internal Variables
 
@@ -218,6 +217,14 @@
       (epurple--send "create_conv" payload 'epurple--conv-spec
 		     `(lambda (p) (funcall #',cb ,account ,conv-type ,conv-name)
 			0)))))
+
+(defun epurple-update-conv (account conv-type conv-name)
+  (with-struct-slots (username protocol-id) epurple-account account
+    (let ((payload `((username    . ,username)
+		     (protocol-id . ,protocol-id)
+		     (conv-type   . ,conv-type)
+		     (conv-name   . ,conv-name))))
+      (epurple--send "update_conv" payload 'epurple--conv-spec))))
 
 ;; msg
 (defvar epurple--send-msg-spec '((username    strz 80)

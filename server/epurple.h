@@ -38,7 +38,7 @@
 #define STR_NAME_SIZE 80
 #define MAX_BUF_SIZE  4096
 #define MAX_MSG_SIZE  512
-#define MAX_POLL_FD   256
+#define MAX_POLL_FD   512
 #define EPURPLE_UI    "epurple"
 
 struct epurple;

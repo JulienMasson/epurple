@@ -21,9 +21,6 @@
 
 ;;; Code:
 
-(require 'epurple-server)
-(require 'epurple-utils)
-
 ;;; Struct
 
 (cl-defstruct epurple-account
@@ -45,6 +42,13 @@
   status
   signed-on
   typing-p)
+
+;; Libraries
+
+(require 'epurple-buffer)
+(require 'epurple-commands)
+(require 'epurple-server)
+(require 'epurple-utils)
 
 ;;; Groups
 
@@ -164,8 +168,9 @@
 	  (with-struct-slots (conv-name buffer unread-p unread-count)
 	    epurple-buffer prpl-buffer
 	    (unless (and only-unreads (not unread-p))
-	      (let ((str (if (zerop unread-count) conv-name
-			   (format "%s (%s)" conv-name unread-count))))
+	      (let* ((name (decode-coding-string conv-name 'utf-8))
+		     (str (if (zerop unread-count) name
+			    (format "%s (%s)" name unread-count))))
 		(add-to-list 'collection (cons (propertize str 'face face)
 					       prpl-buffer))))))))
     (let* ((sorted-collection (cl-sort collection (lambda (mute-a mute-b)

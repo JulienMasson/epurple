@@ -22,7 +22,6 @@
 ;;; Code:
 
 (require 'ansi-color)
-(require 'epurple-commands)
 
 ;;; Struct
 
