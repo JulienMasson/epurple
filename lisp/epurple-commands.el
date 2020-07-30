@@ -37,8 +37,7 @@
   '(("account_connected"    . epurple-account-connected)
     ("account_disconnected" . epurple-account-disconnected)
     ("buddy_typing_update"  . epurple-buddy-typing-update)
-    ("buddy_signed_on_off"  . epurple-buddy-signed-on-off)
-    ("buddy_icon_update"    . epurple-buddy-icon-update)
+    ("buddy_update"         . epurple-buddy-update)
     ("new_msg"              . epurple-new-msg)
     ("purple_init_done"     . epurple-purple-init-done)))
 
@@ -160,28 +159,21 @@
     (bindat-length spec '((account-username "") (buddy-name "")
 			  (conv-name "") (typing 0)))))
 
-(defun epurple-buddy-signed-on-off (payload)
+(defun epurple-buddy-update (payload)
   (let* ((spec '((account-username strz 80)
 		 (buddy-name       strz 80)
+		 (icon             strz 80)
 		 (online           u32r)))
 	 (decoded (bindat-unpack spec payload)))
     (let-alist decoded
       (when-let* ((account (epurple--find-account-by-username .account-username))
 		  (buddy (epurple--find-buddy account .buddy-name)))
-	(setf (epurple-buddy-signed-on buddy) (not (zerop .online)))
-	(epurple-buffer-update account .buddy-name)))
-    (bindat-length spec '((account-username "") (buddy-name "") (online 0)))))
-
-(defun epurple-buddy-icon-update (payload)
-  (let* ((spec '((account-username strz 80)
-		 (buddy-name       strz 80)
-		 (icon             strz 80)))
-	 (decoded (bindat-unpack spec payload)))
-    (let-alist decoded
-      (when-let* ((account (epurple--find-account-by-username .account-username))
-		  (buddy (epurple--find-buddy account .buddy-name)))
-	(setf (epurple-buddy-icon buddy) .icon)))
-    (bindat-length spec '((account-username "") (buddy-name "") (icon "")))))
+	(with-struct-slots (icon signed-on) epurple-buddy buddy
+	  (setq icon .icon)
+	  (setq signed-on (not (zerop .online)))
+	  (epurple-buffer-update account .buddy-name))))
+    (bindat-length spec '((account-username "") (buddy-name "")
+			  (icon "") (online 0)))))
 
 ;; chats
 (defvar epurple--chat-spec '((name strz 80)))

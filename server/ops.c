@@ -82,67 +82,10 @@ static void buddy_typing_update(PurpleAccount *account, const char *name, void *
 		   sizeof(struct buddy_typing_update_data));
 }
 
-struct buddy_signed_on_off_data {
-	char account_username[STR_NAME_SIZE];
-	char buddy_name[STR_NAME_SIZE];
-	int  available;
-};
-
-static void buddy_signed_on_off(PurpleBuddy* buddy, void *data)
-{
-	struct epurple *epurple = (struct epurple *)data;
-	struct buddy_signed_on_off_data buddy_signed_on_off_data;
-	PurplePresence *presence;
-
-	presence = purple_buddy_get_presence(buddy);
-	if (!presence) return;
-
-	memset(buddy_signed_on_off_data.account_username, '\0', STR_NAME_SIZE);
-	strncpy(buddy_signed_on_off_data.account_username, buddy->account->username, STR_NAME_SIZE);
-
-	memset(buddy_signed_on_off_data.buddy_name, '\0', STR_NAME_SIZE);
-	strncpy(buddy_signed_on_off_data.buddy_name, buddy->name, STR_NAME_SIZE);
-
-	buddy_signed_on_off_data.available = purple_presence_is_available(presence);
-
-	printf("buddy_signed_on_off: %s -> %d\n", buddy->name, buddy_signed_on_off_data.available);
-	emacs_send(epurple, "buddy_signed_on_off", 0, (char *)&buddy_signed_on_off_data,
-		   sizeof(struct buddy_signed_on_off_data));
-}
-
-struct buddy_icon_update_data {
-	char account_username[STR_NAME_SIZE];
-	char buddy_name[STR_NAME_SIZE];
-	char icon[STR_NAME_SIZE];
-};
-
-static void buddy_icon_update(PurpleBuddy *buddy, void *data)
-{
-	struct epurple *epurple = (struct epurple *)data;
-	struct buddy_icon_update_data buddy_icon_update_data;
-	char *icon = NULL;
-
-	memset(buddy_icon_update_data.account_username, '\0', STR_NAME_SIZE);
-	strncpy(buddy_icon_update_data.account_username, buddy->account->username, STR_NAME_SIZE);
-
-	memset(buddy_icon_update_data.buddy_name, '\0', STR_NAME_SIZE);
-	strncpy(buddy_icon_update_data.buddy_name, buddy->name, STR_NAME_SIZE);
-
-	memset(buddy_icon_update_data.icon, '\0',  STR_NAME_SIZE);
-	if (buddy->icon)
-		icon = purple_buddy_icon_get_full_path(buddy->icon);
-	if (icon)
-		strncpy(buddy_icon_update_data.icon, icon, STR_NAME_SIZE);
-
-	printf("buddy_icon_update: %s\n", buddy_icon_update_data.buddy_name);
-	emacs_send(epurple, "buddy_icon_update", 0, (char *)&buddy_icon_update_data,
-		   sizeof(struct buddy_icon_update_data));
-}
-
 static void ui_init(void)
 {
 	struct epurple *epurple = epurple_get();
-	void *conv_instance, *blist_instance;
+	void *conv_instance;
 	static int handle;
 
 	purple_disconnect_all();
@@ -164,13 +107,6 @@ static void ui_init(void)
 
 	/* blist */
 	purple_blist_set_ui_ops(&blist_ops);
-	blist_instance = purple_blist_get_handle();
-	purple_signal_connect(blist_instance, "buddy-signed-on", &handle,
-			      PURPLE_CALLBACK(buddy_signed_on_off), epurple);
-	purple_signal_connect(blist_instance, "buddy-signed-off", &handle,
-			      PURPLE_CALLBACK(buddy_signed_on_off), epurple);
-	purple_signal_connect(blist_instance, "buddy-icon-changed", &handle,
-			      PURPLE_CALLBACK(buddy_icon_update), epurple);
 
 	emacs_send(epurple, "purple_init_done", 0, NULL, 0);
 }
@@ -464,12 +400,52 @@ PurpleConversationUiOps conversation_ops = {
 };
 
 /* blist */
+struct buddy_update_data {
+	char account_username[STR_NAME_SIZE];
+	char buddy_name[STR_NAME_SIZE];
+	char icon[STR_NAME_SIZE];
+	int  available;
+};
+
+static void blist_update(PurpleBuddyList *list, PurpleBlistNode *node)
+{
+	if (PURPLE_BLIST_NODE_IS_BUDDY(node)) {
+
+		struct epurple *epurple = epurple_get();
+		PurpleBuddy* buddy = (PurpleBuddy*)node;
+		struct buddy_update_data buddy_update_data;
+		PurplePresence *presence;
+		char *icon = NULL;
+
+		memset(buddy_update_data.account_username, '\0', STR_NAME_SIZE);
+		strncpy(buddy_update_data.account_username, buddy->account->username, STR_NAME_SIZE);
+
+		memset(buddy_update_data.buddy_name, '\0', STR_NAME_SIZE);
+		strncpy(buddy_update_data.buddy_name, buddy->name, STR_NAME_SIZE);
+
+		memset(buddy_update_data.icon, '\0',  STR_NAME_SIZE);
+		if (buddy->icon)
+			icon = purple_buddy_icon_get_full_path(buddy->icon);
+		if (icon)
+			strncpy(buddy_update_data.icon, icon, STR_NAME_SIZE);
+
+		presence = purple_buddy_get_presence(buddy);
+		if (!presence) return;
+		buddy_update_data.available = purple_presence_is_available(presence);
+
+		printf("Update: %s -> %d (%s)\n", buddy_update_data.buddy_name,
+		       buddy_update_data.available, buddy_update_data.icon);
+		emacs_send(epurple, "buddy_update", 0, (char *)&buddy_update_data,
+			   sizeof(struct buddy_update_data));
+	}
+}
+
 PurpleBlistUiOps blist_ops =
 {
 	NULL, /* new_list */
 	NULL, /* new_node */
 	NULL, /* show */
-	NULL, /* update */
+	blist_update,
 	NULL, /* remove */
 	NULL, /* destroy */
 	NULL, /* set_visible */
