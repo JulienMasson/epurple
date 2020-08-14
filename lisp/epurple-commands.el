@@ -243,13 +243,22 @@
 		 (conv-type  u32r)
 		 (conv-name  strz 80)
 		 (sender     strz 80)
-		 (msg        strz 512)
 		 (flags      u32r)
-		 (time       u32r)))
-	 (decoded (bindat-unpack spec payload)))
-    (epurple-buffer-new-msg decoded)
-    (bindat-length spec '((username "") (conv-type 0) (conv-name "") (sender "")
-			  (msg "") (flags 0) (time 0)))))
+		 (time       u32r)
+		 (msg-size   u32r)))
+	 (msg-data-length (bindat-length spec '((username "")
+						(conv-type 0)
+						(conv-name "")
+						(sender "")
+						(flags 0)
+						(time 0)
+						(msg-size 0))))
+	 (payload-msg-data (substring payload 0 msg-data-length))
+	 (decoded (bindat-unpack spec payload-msg-data)))
+    (let-alist decoded
+      (epurple-buffer-new-msg decoded(substring payload msg-data-length
+						(+ msg-data-length .msg-size)))
+      (+ msg-data-length .msg-size))))
 
 ;; handler
 (defun epurple-commands-handler (data)

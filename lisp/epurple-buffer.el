@@ -330,15 +330,15 @@
     (with-current-buffer buffer
       (epurple-buffer--im-header-line account conv-name))))
 
-(defun epurple-buffer-new-msg (data)
-  (let-alist data
+(defun epurple-buffer-new-msg (header msg)
+  (let-alist header
     (when-let ((account (epurple--find-account-by-username .username)))
       (let* ((name (decode-coding-string .conv-name 'utf-8))
 	     (sender (decode-coding-string .sender 'utf-8))
 	     (buffer (epurple-buffer--find account .conv-type name)))
 	(unless buffer
 	  (setq buffer (epurple-buffer--new account .conv-type name)))
-	(epurple-buffer--insert-msg account buffer sender .msg .time)))))
+	(epurple-buffer--insert-msg account buffer sender msg .time)))))
 
 (defun epurple-buffer-conv (account conv-type conv-name)
   (let* ((name (decode-coding-string conv-name 'utf-8))

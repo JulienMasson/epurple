@@ -274,14 +274,14 @@ PurpleConnectionUiOps connection_ops = {
 };
 
 /* conversation */
-struct new_msg_data {
+struct new_msg_header {
 	char username[STR_NAME_SIZE];
 	int  conv_type;
 	char conv_name[STR_NAME_SIZE];
 	char sender[STR_NAME_SIZE];
-	char msg[MAX_MSG_SIZE];
 	int  flags;
 	int  time;
+	int  msg_size;
 };
 
 static void create_conversation(PurpleConversation *conv)
@@ -297,41 +297,38 @@ static void destroy_conversation(PurpleConversation *conv)
 static void new_msg(PurpleConversation *conv, const char *who, const char *message,
 		    PurpleMessageFlags flags, time_t mtime)
 {
-	struct new_msg_data data;
 	struct epurple *epurple = epurple_get();
+	struct new_msg_header msg_header;
+	char *data;
+	int msg_header_size, data_size;
 
-	memset(data.username, '\0', STR_NAME_SIZE);
-	snprintf(data.username, STR_NAME_SIZE, "%s", conv->account->username);
+	memset(msg_header.username, '\0', STR_NAME_SIZE);
+	snprintf(msg_header.username, STR_NAME_SIZE, "%s", conv->account->username);
 
-	memset(data.conv_name, '\0', STR_NAME_SIZE);
-	snprintf(data.conv_name, STR_NAME_SIZE, "%s", conv->name);
+	msg_header.conv_type = conv->type;
 
-	memset(data.sender, '\0', STR_NAME_SIZE);
-	snprintf(data.sender, STR_NAME_SIZE, "%s", who);
+	memset(msg_header.conv_name, '\0', STR_NAME_SIZE);
+	snprintf(msg_header.conv_name, STR_NAME_SIZE, "%s", conv->name);
 
-	memset(data.msg, '\0', MAX_MSG_SIZE);
-	snprintf(data.msg, MAX_MSG_SIZE, "%s", message);
+	memset(msg_header.sender, '\0', STR_NAME_SIZE);
+	snprintf(msg_header.sender, STR_NAME_SIZE, "%s", who);
 
-	data.conv_type = conv->type;
-	data.flags = flags;
-	data.time = mtime;
+	msg_header.flags = flags;
+	msg_header.time = mtime;
+	msg_header.msg_size = strlen(message);
 
-	printf("new_msg: %d %ld - %s -> %s\n", flags, mtime, who, message);
-	emacs_send(epurple, "new_msg", 0, (char *)&data, sizeof(struct new_msg_data));
-}
+	msg_header_size = sizeof(struct new_msg_header);
+	data_size = msg_header_size + msg_header.msg_size;
 
-static void write_chat(PurpleConversation *conv, const char *who, const char *message,
-		       PurpleMessageFlags flags, time_t mtime)
-{
-	printf("write_chat: %s -> %s\n", who, message);
-	new_msg(conv, who, message, flags, mtime);
-}
+	data = malloc(data_size);
+	memcpy(data, &msg_header, msg_header_size);
 
-static void write_im(PurpleConversation *conv, const char *who, const char *message,
-		     PurpleMessageFlags flags, time_t mtime)
-{
-	printf("write_im: %s -> %s\n", who, message);
-	new_msg(conv, who, message, flags, mtime);
+	memset(data + msg_header_size, '\0', msg_header.msg_size);
+	memcpy(data + msg_header_size, message, msg_header.msg_size);
+
+	printf("new_msg: %s -> %d: %s\n", who, msg_header.msg_size, message);
+	emacs_send(epurple, "new_msg", 0, data, data_size);
+	free(data);
 }
 
 static void write_conv(PurpleConversation *conv, const char *name, const char *alias,
@@ -380,8 +377,8 @@ static gboolean has_focus(PurpleConversation *conv)
 PurpleConversationUiOps conversation_ops = {
     create_conversation,
     destroy_conversation,
-    write_chat,
-    write_im,
+    new_msg,
+    new_msg,
     write_conv,
     chat_add_users,
     chat_rename_user,
