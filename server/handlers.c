@@ -110,7 +110,7 @@ static int create_conv(PurpleAccount *acct, int conv_type, char *conv_name)
 {
 	PurpleConversation *conv;
 
-	printf("Creating conv: %s\n", conv_name);
+	printf("Creating conv: %d - %s\n", conv_type, conv_name);
 	conv = purple_conversation_new(conv_type, acct, conv_name);
 	if (!conv) return -1;
 
@@ -123,12 +123,18 @@ static int create_conv(PurpleAccount *acct, int conv_type, char *conv_name)
 
 		serv_join_chat(gc, purple_chat_get_components(chat));
 	}
-	printf("Creating conv done: %s\n", conv_name);
 
 	return 0;
 }
 
-static void create_conv_handler(struct epurple *epurple, int id, char *payload, size_t len)
+static int find_conv(PurpleAccount *acct, int conv_type, char *conv_name)
+{
+	if (!purple_find_conversation_with_account(conv_type, conv_name, acct))
+		return create_conv(acct, conv_type, conv_name);
+	return 0;
+}
+
+static void find_conv_handler(struct epurple *epurple, int id, char *payload, size_t len)
 {
 	struct conv_data *conv_data = (struct conv_data *)payload;
 	PurpleAccount *acct;
@@ -136,7 +142,7 @@ static void create_conv_handler(struct epurple *epurple, int id, char *payload, 
 	acct = purple_accounts_find(conv_data->username, conv_data->protocol_id);
 	if (!acct) return;
 
-	if (!create_conv(acct, conv_data->conv_type, conv_data->conv_name))
+	if (!find_conv(acct, conv_data->conv_type, conv_data->conv_name))
 		emacs_ack(epurple, id);
 }
 
@@ -281,7 +287,7 @@ struct handler handlers[] = {
 	{"account_disconnect", account_disconnect_handler},
 	{"buddies_get_all",    buddies_get_all_handler},
 	{"chats_get_all",      chats_get_all_handler},
-	{"create_conv",        create_conv_handler},
+	{"find_conv",          find_conv_handler},
 	{"update_conv",        update_conv_handler},
 	{"purple_init",        purple_init_handler},
 	{"send_msg",           send_msg_handler}

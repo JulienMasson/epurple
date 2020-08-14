@@ -340,7 +340,7 @@
 	  (setq buffer (epurple-buffer--new account .conv-type name)))
 	(epurple-buffer--insert-msg account buffer sender .msg .time)))))
 
-(defun epurple-buffer-new-conv (account conv-type conv-name)
+(defun epurple-buffer-conv (account conv-type conv-name)
   (let* ((name (decode-coding-string conv-name 'utf-8))
 	 (buffer (epurple-buffer--find account conv-type name)))
     (unless buffer

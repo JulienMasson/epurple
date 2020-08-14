@@ -239,8 +239,8 @@
 	 (prompt (with-struct-slots (name face) epurple-account account
 		   (format "Chat (%s): " (propertize name 'face face))))
 	 (chat (completing-read prompt (epurple-account-chats account))))
-    (epurple-create-conv account 2 (encode-coding-string chat 'utf-8)
-			 #'epurple-buffer-new-conv)))
+    (epurple-find-conv account 2 (encode-coding-string chat 'utf-8)
+		       #'epurple-buffer-conv)))
 
 (defun epurple-im (name)
   (interactive (list (epurple--prompt-active "IM: ")))
@@ -248,8 +248,8 @@
 	 (prompt (with-struct-slots (name face) epurple-account account
 		  (format "IM (%s): " (propertize name 'face face))))
 	 (im (epurple--prompt-buddies account prompt)))
-    (epurple-create-conv account 1 (encode-coding-string im 'utf-8)
-			 #'epurple-buffer-new-conv)))
+    (epurple-find-conv account 1 (encode-coding-string im 'utf-8)
+			 #'epurple-buffer-conv)))
 
 (defun epurple-mute-toggle (buffer)
   (interactive (list (epurple--prompt-buffers "Toggle Mute: ")))

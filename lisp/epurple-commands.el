@@ -202,13 +202,13 @@
 			     (conv-type   u32r)
 			     (conv-name   strz 80)))
 
-(defun epurple-create-conv (account conv-type conv-name cb)
+(defun epurple-find-conv (account conv-type conv-name cb)
   (with-struct-slots (username protocol-id) epurple-account account
     (let ((payload `((username    . ,username)
 		     (protocol-id . ,protocol-id)
 		     (conv-type   . ,conv-type)
 		     (conv-name   . ,conv-name))))
-      (epurple--send "create_conv" payload 'epurple--conv-spec
+      (epurple--send "find_conv" payload 'epurple--conv-spec
 		     `(lambda (p) (funcall #',cb ,account ,conv-type ,conv-name)
 			0)))))
 
