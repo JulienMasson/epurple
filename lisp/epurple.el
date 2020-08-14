@@ -168,9 +168,8 @@
 	  (with-struct-slots (conv-name buffer unread-p unread-count)
 	    epurple-buffer prpl-buffer
 	    (unless (and only-unreads (not unread-p))
-	      (let* ((name (decode-coding-string conv-name 'utf-8))
-		     (str (if (zerop unread-count) name
-			    (format "%s (%s)" name unread-count))))
+	      (let ((str (if (zerop unread-count) conv-name
+			   (format "%s (%s)" conv-name unread-count))))
 		(add-to-list 'collection (cons (propertize str 'face face)
 					       prpl-buffer))))))))
     (let* ((sorted-collection (cl-sort collection (lambda (mute-a mute-b)
@@ -190,12 +189,15 @@
 
 (defun epurple--chats-info (account chats)
   (dolist (chat chats)
-    (push (assoc-default 'name chat) (epurple-account-chats account))))
+    (push (decode-coding-string (assoc-default 'name chat) 'utf-8)
+	  (epurple-account-chats account))))
 
 (defun epurple--buddies-info (account buddies)
   (dolist (buddy buddies)
-    (push (alist-to-struct buddy 'epurple-buddy)
-	  (epurple-account-buddies account)))
+    (let ((buddy-s (alist-to-struct buddy 'epurple-buddy)))
+      (with-struct-slots (name) epurple-buddy buddy-s
+	(setq name (decode-coding-string name 'utf-8)))
+      (push buddy-s (epurple-account-buddies account))))
   (epurple-chats-get-all account (apply-partially #'epurple--chats-info account)))
 
 (defun epurple--accounts-info (accounts)
@@ -237,7 +239,8 @@
 	 (prompt (with-struct-slots (name face) epurple-account account
 		   (format "Chat (%s): " (propertize name 'face face))))
 	 (chat (completing-read prompt (epurple-account-chats account))))
-    (epurple-create-conv account 2 chat #'epurple-buffer-new-conv)))
+    (epurple-create-conv account 2 (encode-coding-string chat 'utf-8)
+			 #'epurple-buffer-new-conv)))
 
 (defun epurple-im (name)
   (interactive (list (epurple--prompt-active "IM: ")))
@@ -245,7 +248,8 @@
 	 (prompt (with-struct-slots (name face) epurple-account account
 		  (format "IM (%s): " (propertize name 'face face))))
 	 (im (epurple--prompt-buddies account prompt)))
-    (epurple-create-conv account 1 im #'epurple-buffer-new-conv)))
+    (epurple-create-conv account 1 (encode-coding-string im 'utf-8)
+			 #'epurple-buffer-new-conv)))
 
 (defun epurple-mute-toggle (buffer)
   (interactive (list (epurple--prompt-buffers "Toggle Mute: ")))

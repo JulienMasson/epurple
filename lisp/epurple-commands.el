@@ -153,7 +153,8 @@
 	 (decoded (bindat-unpack spec payload)))
     (let-alist decoded
       (when-let* ((account (epurple--find-account-by-username .account-username))
-		  (buddy (epurple--find-buddy account .buddy-name)))
+		  (buddy-name (decode-coding-string .buddy-name 'utf-8))
+		  (buddy (epurple--find-buddy account buddy-name)))
 	(setf (epurple-buddy-typing-p buddy) (not (zerop .typing)))
 	(epurple-buffer-update account .conv-name)))
     (bindat-length spec '((account-username "") (buddy-name "")
@@ -167,7 +168,8 @@
 	 (decoded (bindat-unpack spec payload)))
     (let-alist decoded
       (when-let* ((account (epurple--find-account-by-username .account-username))
-		  (buddy (epurple--find-buddy account .buddy-name)))
+		  (buddy-name (decode-coding-string .buddy-name 'utf-8))
+		  (buddy (epurple--find-buddy account buddy-name)))
 	(with-struct-slots (icon signed-on) epurple-buddy buddy
 	  (setq icon .icon)
 	  (setq signed-on (not (zerop .online)))
@@ -228,11 +230,12 @@
 (defun epurple-send-msg (account prpl-buffer msg)
   (with-struct-slots (username protocol-id) epurple-account account
     (with-struct-slots (conv-type conv-name) epurple-buffer prpl-buffer
-      (let ((payload `((username    . ,username)
-		       (protocol-id . ,protocol-id)
-		       (conv-type   . ,conv-type)
-		       (conv-name   . ,conv-name)
-		       (msg         . ,msg))))
+      (let* ((name (encode-coding-string conv-name 'utf-8))
+	     (payload `((username    . ,username)
+			(protocol-id . ,protocol-id)
+			(conv-type   . ,conv-type)
+			(conv-name   . ,name)
+			(msg         . ,msg))))
 	(epurple--send "send_msg" payload 'epurple--send-msg-spec)))))
 
 (defun epurple-new-msg (payload)

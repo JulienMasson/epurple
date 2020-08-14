@@ -112,7 +112,7 @@
                                  lui-time-stamp-zone))
 	 (ts-str (propertize ts 'face 'lui-time-stamp-face))
 	 (icon-str (when icon (propertize "image" 'display icon)))
-	 (icon-length (if icon 6 0))
+	 (icon-length (if icon 5 0))
 	 (spaces (- lui-fill-column (length ts) icon-length))
 	 (fmt (format "%%-%ds%%s" spaces))
 	 (inhibit-read-only t)
@@ -132,7 +132,8 @@
 			  (epurple--find-buddy account alias)
 			 (epurple--find-buddy account sender)))
 		(icon (epurple-buddy-icon buddy)))
-      (create-image icon nil nil :scale 0.15 :ascent 80))))
+      (when (and icon (not (string= icon "")))
+	(create-image icon nil nil :scale 0.17 :ascent 80)))))
 
 (defun epurple-buffer--propertize-sender (account sender)
   (with-struct-slots (alias face) epurple-account account
@@ -279,12 +280,11 @@
 (defun epurple-buffer--setup (account prpl-buffer)
   (with-struct-slots (conv-type conv-name) epurple-buffer prpl-buffer
     (let* ((account-name (epurple-account-name account))
-	   (name (decode-coding-string conv-name 'utf-8))
-	   (buffer-name (format "*%s: %s*" account-name name)))
+	   (buffer-name (format "*%s: %s*" account-name conv-name)))
       (with-current-buffer (get-buffer-create buffer-name)
 	(epurple-mode)
 	(cond ((= conv-type 1)
-	       (epurple-buffer--im-header-line account name)
+	       (epurple-buffer--im-header-line account conv-name)
 	       (setq mode-name "Epurple IM"))
 	      ((= conv-type 2)
 	       (setq mode-name "Epurple Chat")))
@@ -333,15 +333,18 @@
 (defun epurple-buffer-new-msg (data)
   (let-alist data
     (when-let ((account (epurple--find-account-by-username .username)))
-      (let ((buffer (epurple-buffer--find account .conv-type .conv-name)))
+      (let* ((name (decode-coding-string .conv-name 'utf-8))
+	     (sender (decode-coding-string .sender 'utf-8))
+	     (buffer (epurple-buffer--find account .conv-type name)))
 	(unless buffer
-	  (setq buffer (epurple-buffer--new account .conv-type .conv-name)))
-	(epurple-buffer--insert-msg account buffer .sender .msg .time)))))
+	  (setq buffer (epurple-buffer--new account .conv-type name)))
+	(epurple-buffer--insert-msg account buffer sender .msg .time)))))
 
 (defun epurple-buffer-new-conv (account conv-type conv-name)
-  (let ((buffer (epurple-buffer--find account conv-type conv-name)))
+  (let* ((name (decode-coding-string conv-name 'utf-8))
+	 (buffer (epurple-buffer--find account conv-type name)))
     (unless buffer
-      (setq buffer (epurple-buffer--new account conv-type conv-name))
+      (setq buffer (epurple-buffer--new account conv-type name))
       (epurple-buffer-display buffer))))
 
 (provide 'epurple-buffer)
