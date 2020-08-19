@@ -38,7 +38,6 @@
 #define STR_NAME_SIZE 80
 #define MAX_BUF_SIZE  4096
 #define MAX_MSG_SIZE  512
-#define MAX_POLL_FD   512
 #define EPURPLE_UI    "epurple"
 
 struct epurple;
@@ -53,7 +52,6 @@ struct epurple_event {
 struct epurple {
 	int sock_fd;
 	int emacs_fd;
-	struct epurple_event events[MAX_POLL_FD];
 };
 
 struct epurple *epurple_get(void);

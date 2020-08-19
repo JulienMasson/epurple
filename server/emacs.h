@@ -21,7 +21,7 @@
 
 #include "epurple.h"
 
-void emacs_handler(struct epurple *epurple, int fd, void *data);
+gboolean emacs_handler(GIOChannel *in, GIOCondition cond, gpointer data);
 
 void emacs_send(struct epurple *epurple, char *command, int id, char *payload, size_t len);
 

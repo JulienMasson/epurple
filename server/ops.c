@@ -18,6 +18,8 @@
 
 #include "ops.h"
 #include "emacs.h"
+#define PURPLE_GLIB_READ_COND  (G_IO_IN  | G_IO_HUP | G_IO_ERR)
+#define PURPLE_GLIB_WRITE_COND (G_IO_OUT | G_IO_HUP | G_IO_ERR | G_IO_NVAL)
 
 /* core */
 static void purple_disconnect_all(void)
@@ -123,101 +125,58 @@ PurpleCoreUiOps core_ops = {
 };
 
 /* eventloop */
-struct eventloop_timeout_data {
-	GSourceFunc func;
-	gpointer data;
-	struct itimerspec ts;
-};
-
-static void eventloop_timeout_handler(struct epurple *epurple, int fd, void *data)
-{
-	struct eventloop_timeout_data *timeout_data = (struct eventloop_timeout_data *)data;
-
-	if (timeout_data->func(timeout_data->data) == FALSE) {
-		timeout_data->ts.it_value.tv_sec = 0;
-		timeout_data->ts.it_value.tv_nsec = 0;
-	}
-
-	timerfd_settime(fd, 0, &timeout_data->ts, NULL);
-}
-
-static guint eventloop_timeout_add(guint interval, GSourceFunc func, gpointer data)
-{
-	struct eventloop_timeout_data *timeout_data;
-	uint handle;
-	int fd;
-
-	fd = timerfd_create(CLOCK_REALTIME, 0);
-	timeout_data = malloc(sizeof(struct eventloop_timeout_data));
-	timeout_data->func = func;
-	timeout_data->data = data;
-
-	memset(&timeout_data->ts, 0, sizeof(timeout_data->ts));
-	if (interval == 0) {
-		timeout_data->ts.it_value.tv_sec = 0;
-		timeout_data->ts.it_value.tv_nsec = 1;
-	} else {
-		timeout_data->ts.it_value.tv_sec = (interval / 1000);
-		timeout_data->ts.it_value.tv_nsec = (interval % 1000) * 1000000;
-	}
-
-	handle = epurple_add_event(fd, POLLIN, eventloop_timeout_handler, timeout_data);
-	timerfd_settime(fd, 0, &timeout_data->ts, NULL);
-
-	return handle;
-}
-
-static gboolean eventloop_timeout_remove(guint handle)
-{
-	epurple_remove_event(handle);
-	return TRUE;
-}
-
 struct eventloop_input_data {
-	PurpleInputCondition cond;
 	PurpleInputFunction func;
 	gpointer data;
 };
 
-static void eventloop_input_handler(struct epurple *epurple, int fd, void *data)
+static gboolean eventloop_input_handler(GIOChannel *source, GIOCondition cond, gpointer data)
 {
-	struct eventloop_input_data *input_data = (struct eventloop_input_data *)data;
-	input_data->func(input_data->data, fd, input_data->cond);
+	struct eventloop_input_data *input_data = data;
+	PurpleInputCondition purple_cond = 0;
+	int fd = g_io_channel_unix_get_fd(source);
+
+	if (cond & PURPLE_GLIB_READ_COND)
+		purple_cond |= PURPLE_INPUT_READ;
+	if (cond & PURPLE_GLIB_WRITE_COND)
+		purple_cond |= PURPLE_INPUT_WRITE;
+
+	input_data->func(input_data->data, fd, purple_cond);
+
+	return TRUE;
 }
 
 static guint eventloop_input_add(int fd, PurpleInputCondition cond, PurpleInputFunction func,
 				 gpointer data)
 {
 	struct eventloop_input_data *input_data;
-	short events = 0;
-	uint handle;
+	GIOCondition gio_cond = 0;
+	GIOChannel *channel;
+	int source_id;
 
 	if (cond & PURPLE_INPUT_READ)
-		events |= POLLIN;
+		gio_cond |= PURPLE_GLIB_READ_COND;
 	if (cond & PURPLE_INPUT_WRITE)
-		events |= POLLOUT;
+		gio_cond |= PURPLE_GLIB_WRITE_COND;
 
 	input_data = malloc(sizeof(struct eventloop_input_data));
-	input_data->cond = cond;
 	input_data->func = func;
 	input_data->data = data;
-	handle = epurple_add_event(fd, events, eventloop_input_handler, input_data);
 
-	return handle;
-}
+	channel = g_io_channel_unix_new(fd);
+	source_id = g_io_add_watch_full(channel, G_PRIORITY_DEFAULT, gio_cond,
+					eventloop_input_handler, input_data, g_free);
+	g_io_channel_unref(channel);
 
-static gboolean eventloop_input_remove(guint handle)
-{
-	epurple_remove_event(handle);
-	return TRUE;
+	return source_id;
 }
 
 PurpleEventLoopUiOps eventloop_ops = {
-	eventloop_timeout_add,
-	eventloop_timeout_remove,
+	g_timeout_add,
+	g_source_remove,
 	eventloop_input_add,
-	eventloop_input_remove,
-	NULL, /* input_get_error */
+	g_source_remove,
+	NULL, /* input_get_error, */
 	NULL, /* timeout_add_seconds */
 	NULL,
 	NULL,

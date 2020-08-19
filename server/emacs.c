@@ -24,15 +24,17 @@ struct header {
 	int id;
 };
 
-void emacs_handler(struct epurple *epurple, int fd, void *data)
+gboolean emacs_handler(GIOChannel *in, GIOCondition cond, gpointer data)
 {
 	char buf[MAX_BUF_SIZE];
 	size_t buffer_len;
+	int fd = g_io_channel_unix_get_fd(in);
+	struct epurple *epurple = (struct epurple *)data;
 
 	memset(buf, '\0', sizeof(buf));
 	if ((buffer_len = read(fd, buf, MAX_BUF_SIZE)) == -1) {
 		perror("Failed to read");
-		return;
+		return FALSE;
 	}
 
 	struct header *header = (struct header *)buf;
@@ -44,6 +46,8 @@ void emacs_handler(struct epurple *epurple, int fd, void *data)
 		handler->func(epurple, header->id, payload, buffer_len - header_len);
 	else
 		printf("Unknown command: %s\n", header->command);
+
+	return TRUE;
 }
 
 void emacs_send(struct epurple *epurple, char *command, int id, char *payload, size_t len)
