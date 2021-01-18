@@ -92,7 +92,7 @@
 (defun epurple-server--filter-socket (proc str)
   (with-struct-slots (pending-data) epurple-server epurple-server
     (setq pending-data (concat pending-data str))
-    (unless (= (length str) 4096)
+    (unless (= (length str) read-process-output-max)
       (setq pending-data (epurple-commands-handler pending-data)))))
 
 (defun epurple-server--socket-start ()
