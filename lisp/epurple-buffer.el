@@ -333,7 +333,7 @@
 (defun epurple-buffer-display (buffer)
   (if (get-buffer-window-list buffer)
       (pop-to-buffer buffer)
-    (switch-to-buffer-other-window buffer))
+    (switch-to-buffer buffer))
   (when-let ((account (epurple--find-account-by-prpl-buffer epurple--buffer)))
     (with-struct-slots (conv-type conv-name) epurple-buffer epurple--buffer
       (epurple-update-conv account conv-type conv-name))))
