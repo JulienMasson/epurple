@@ -133,14 +133,18 @@
       (insert "\n")
       (set-marker lui-output-marker (point)))))
 
+(defun epurple-buffer--icon-scale (account)
+  (let ((protocol-id (epurple-account-protocol-id account)))
+    (if (string= protocol-id "prpl-facebook")
+	0.6
+      0.17)))
+
 (defun epurple-buffer--find-icon (account sender)
-  (with-struct-slots (alias) epurple-account account
-    (when-let* ((buddy (if (string= "(null)" sender)
-			  (epurple--find-buddy account alias)
-			 (epurple--find-buddy account sender)))
-		(icon (epurple-buddy-icon buddy)))
-      (when (and icon (not (string= icon "")))
-	(create-image icon nil nil :scale 0.17 :ascent 80)))))
+  (when-let* ((buddy (epurple--find-buddy account sender))
+	      (icon (epurple-buddy-icon buddy))
+	      (scale (epurple-buffer--icon-scale account)))
+    (unless (string= icon "")
+      (create-image icon nil nil :scale scale :ascent 80))))
 
 (defun epurple-buffer--propertize-sender (account sender)
   (with-struct-slots (alias face) epurple-account account
