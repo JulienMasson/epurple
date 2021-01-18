@@ -38,6 +38,11 @@
 
 ;;; Epurple mode
 
+(defvar epurple-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "C-c C-o") 'epurple-open-url)
+    map))
+
 (define-derived-mode epurple-mode lui-mode "Epurple"
   "Epurple major mode."
   (lui-set-prompt lui-prompt-string)
@@ -320,6 +325,10 @@
       prpl-buffer)))
 
 ;;; External Functions
+
+(defun epurple-open-url ()
+  (interactive)
+  (browse-url (epurple-buffer-conv-url epurple--buffer)))
 
 (defun epurple-buffer-display (buffer)
   (if (get-buffer-window-list buffer)
