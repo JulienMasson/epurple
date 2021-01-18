@@ -106,44 +106,58 @@ struct conv_data {
 	char conv_name[STR_NAME_SIZE];
 };
 
-static int create_conv(PurpleAccount *acct, int conv_type, char *conv_name)
+static PurpleConversation *create_conv(PurpleAccount *acct, int conv_type, char *conv_name)
 {
 	PurpleConversation *conv;
 
 	printf("Creating conv: %d - %s\n", conv_type, conv_name);
 	conv = purple_conversation_new(conv_type, acct, conv_name);
-	if (!conv) return -1;
+	if (!conv) return NULL;
 
 	if (conv_type == PURPLE_CONV_TYPE_CHAT) {
 		PurpleConnection *gc = purple_account_get_connection(acct);
-		if (!gc) return -1;
+		if (!gc) return NULL;
 
 		PurpleChat *chat = purple_blist_find_chat(acct, conv_name);
-		if (!chat) return -1;
+		if (!chat) return NULL;
 
 		serv_join_chat(gc, purple_chat_get_components(chat));
 	}
 
-	return 0;
+	return conv;
 }
 
-static int find_conv(PurpleAccount *acct, int conv_type, char *conv_name)
+static PurpleConversation *find_conv(PurpleAccount *acct, int conv_type, char *conv_name)
 {
-	if (!purple_find_conversation_with_account(conv_type, conv_name, acct))
+	PurpleConversation *conv;
+	conv = purple_find_conversation_with_account(conv_type, conv_name, acct);
+	if (!conv)
 		return create_conv(acct, conv_type, conv_name);
-	return 0;
+	return conv;
+}
+
+static void get_conv_url(PurpleConversation *conv, char *conv_url, size_t len)
+{
+	printf("Not implemented yet !\n");
+	snprintf(conv_url, len, "http://google.com/");
 }
 
 static void find_conv_handler(struct epurple *epurple, int id, char *payload, size_t len)
 {
 	struct conv_data *conv_data = (struct conv_data *)payload;
 	PurpleAccount *acct;
+	PurpleConversation *conv;
+	char conv_url[STR_NAME_SIZE];
 
 	acct = purple_accounts_find(conv_data->username, conv_data->protocol_id);
 	if (!acct) return;
 
-	if (!find_conv(acct, conv_data->conv_type, conv_data->conv_name))
-		emacs_ack(epurple, id);
+	conv = find_conv(acct, conv_data->conv_type, conv_data->conv_name);
+	if (conv) {
+		memset(conv_url, '\0', STR_NAME_SIZE);
+		get_conv_url(conv, conv_url, STR_NAME_SIZE);
+		emacs_send(epurple, NULL, id, conv_url, STR_NAME_SIZE);
+	}
 }
 
 static void update_conv_handler(struct epurple *epurple, int id, char *payload, size_t len)

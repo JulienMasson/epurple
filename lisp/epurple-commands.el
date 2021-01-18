@@ -202,15 +202,22 @@
 			     (conv-type   u32r)
 			     (conv-name   strz 80)))
 
-(defun epurple-find-conv (account conv-type conv-name cb)
+(defun epurple-find-conv-cb (cb account conv-type conv-name display-name payload)
+  (let* ((spec '((conv-url strz 80)))
+	 (decoded (bindat-unpack spec payload)))
+    (let-alist decoded
+      (funcall cb account conv-type conv-name display-name .conv-url)
+      (length payload))))
+
+(defun epurple-find-conv (account conv-type conv-name display-name cb)
   (with-struct-slots (username protocol-id) epurple-account account
     (let ((payload `((username    . ,username)
 		     (protocol-id . ,protocol-id)
 		     (conv-type   . ,conv-type)
 		     (conv-name   . ,conv-name))))
       (epurple--send "find_conv" payload 'epurple--conv-spec
-		     `(lambda (p) (funcall #',cb ,account ,conv-type ,conv-name)
-			0)))))
+		     (apply-partially #'epurple-find-conv-cb
+				      cb account conv-type conv-name display-name)))))
 
 (defun epurple-update-conv (account conv-type conv-name)
   (with-struct-slots (username protocol-id) epurple-account account
@@ -242,6 +249,7 @@
   (let* ((spec '((username   strz 80)
 		 (conv-type  u32r)
 		 (conv-name  strz 80)
+		 (conv-url   strz 80)
 		 (sender     strz 80)
 		 (flags      u32r)
 		 (time       u32r)
@@ -249,6 +257,7 @@
 	 (msg-data-length (bindat-length spec '((username "")
 						(conv-type 0)
 						(conv-name "")
+						(conv-url "")
 						(sender "")
 						(flags 0)
 						(time 0)

@@ -237,6 +237,7 @@ struct new_msg_header {
 	char username[STR_NAME_SIZE];
 	int  conv_type;
 	char conv_name[STR_NAME_SIZE];
+	char conv_url[STR_NAME_SIZE];
 	char sender[STR_NAME_SIZE];
 	int  flags;
 	int  time;
@@ -260,6 +261,7 @@ static void new_msg(PurpleConversation *conv, const char *who, const char *messa
 	struct new_msg_header msg_header;
 	char *data;
 	int msg_header_size, data_size;
+	char conv_url[STR_NAME_SIZE];
 
 	memset(msg_header.username, '\0', STR_NAME_SIZE);
 	snprintf(msg_header.username, STR_NAME_SIZE, "%s", conv->account->username);
@@ -268,6 +270,9 @@ static void new_msg(PurpleConversation *conv, const char *who, const char *messa
 
 	memset(msg_header.conv_name, '\0', STR_NAME_SIZE);
 	snprintf(msg_header.conv_name, STR_NAME_SIZE, "%s", conv->name);
+
+	memset(conv_url, '\0', STR_NAME_SIZE);
+	snprintf(msg_header.conv_url, STR_NAME_SIZE, conv_url);
 
 	memset(msg_header.sender, '\0', STR_NAME_SIZE);
 	snprintf(msg_header.sender, STR_NAME_SIZE, "%s", who);

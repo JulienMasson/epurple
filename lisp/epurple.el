@@ -165,11 +165,11 @@
     (dolist (account epurple-accounts)
       (with-struct-slots (face prpl-buffers) epurple-account account
 	(dolist (prpl-buffer prpl-buffers)
-	  (with-struct-slots (conv-name buffer unread-p unread-count)
+	  (with-struct-slots (display-name buffer unread-p unread-count)
 	    epurple-buffer prpl-buffer
 	    (unless (and only-unreads (not unread-p))
-	      (let ((str (if (zerop unread-count) conv-name
-			   (format "%s (%s)" conv-name unread-count))))
+	      (let ((str (if (zerop unread-count) display-name
+			   (format "%s (%s)" display-name unread-count))))
 		(add-to-list 'collection (cons (propertize str 'face face)
 					       prpl-buffer))))))))
     (let* ((sorted-collection (cl-sort collection (lambda (mute-a mute-b)
@@ -181,11 +181,14 @@
 (defun epurple--prompt-buddies (account prompt)
   (let (onlines offlines)
     (dolist (buddy (epurple-account-buddies account))
-      (with-struct-slots (name signed-on) epurple-buddy buddy
-	(if signed-on
-	    (push (propertize name 'face 'success) onlines)
-	  (push (propertize name 'face 'error) offlines))))
-    (completing-read prompt (append onlines offlines))))
+      (let ((display-name (epurple-buddy-display-name account buddy)))
+	(with-struct-slots (name signed-on) epurple-buddy buddy
+	  (if signed-on
+	      (push (cons (propertize display-name 'face 'success) name) onlines)
+	    (push (cons (propertize display-name 'face 'error) name) offlines)))))
+    (let* ((collection (append onlines offlines))
+	   (target (completing-read prompt (mapcar #'car collection))))
+      (assoc target collection))))
 
 (defun epurple--chats-info (account chats)
   (dolist (chat chats)
@@ -233,23 +236,28 @@
 
 ;;; External Functions
 
+(defun epurple-buddy-display-name (account buddy)
+  (let* ((protocol-id (epurple-account-protocol-id account))
+	 (name (if (string= protocol-id "prpl-facebook")
+		   (epurple-buddy-server-alias buddy)
+		 (epurple-buddy-name buddy))))
+    (decode-coding-string name 'utf-8)))
+
 (defun epurple-chat (name)
   (interactive (list (epurple--prompt-active "Chat: ")))
   (let* ((account (epurple--find-account name))
 	 (prompt (with-struct-slots (name face) epurple-account account
 		   (format "Chat (%s): " (propertize name 'face face))))
 	 (chat (completing-read prompt (epurple-account-chats account))))
-    (epurple-find-conv account 2 (encode-coding-string chat 'utf-8)
-		       #'epurple-buffer-conv)))
+    (epurple-find-conv account 2 chat chat #'epurple-buffer-conv)))
 
 (defun epurple-im (name)
   (interactive (list (epurple--prompt-active "IM: ")))
   (let* ((account (epurple--find-account name))
 	 (prompt (with-struct-slots (name face) epurple-account account
-		  (format "IM (%s): " (propertize name 'face face))))
-	 (im (epurple--prompt-buddies account prompt)))
-    (epurple-find-conv account 1 (encode-coding-string im 'utf-8)
-			 #'epurple-buffer-conv)))
+		   (format "IM (%s): " (propertize name 'face face)))))
+    (pcase-let ((`(,display-name . ,name) (epurple--prompt-buddies account prompt)))
+      (epurple-find-conv account 1 name display-name #'epurple-buffer-conv))))
 
 (defun epurple-mute-toggle (buffer)
   (interactive (list (epurple--prompt-buffers "Toggle Mute: ")))
