@@ -30,6 +30,7 @@
   alias
   protocol-id
   active-p
+  auto-reconnect
   prpl-buffers
   buddies
   chats)
@@ -102,6 +103,11 @@
 
 (defcustom epurple-nick-name nil
   "Nick name used to identified the user in epurple conversation"
+  :type 'string
+  :group 'epurple)
+
+(defcustom epurple-auto-reconnect nil
+  "Auto reconnect an account when this one has been disconnected"
   :type 'string
   :group 'epurple)
 
@@ -206,7 +212,7 @@
 (defun epurple--accounts-info (accounts)
   (dolist (account accounts)
     (let ((account (alist-to-struct account 'epurple-account)))
-      (with-struct-slots (name face username protocol-id) epurple-account account
+      (with-struct-slots (name face username protocol-id auto-reconnect) epurple-account account
 	(let ((alias (assoc-default username epurple-name-alias))
 	      (a-face (cond ((string= protocol-id "prpl-facebook") 'epurple-facebook-face)
 			    ((string= protocol-id "prpl-slack") 'epurple-slack-face)
@@ -215,6 +221,7 @@
 			    (t 'default))))
 	  (setq name (if alias alias username))
 	  (setq face a-face)
+	  (setq auto-reconnect epurple-auto-reconnect)
 	  (push account epurple-accounts))))))
 
 (defun epurple--mark-buffer-as-read (buffer)

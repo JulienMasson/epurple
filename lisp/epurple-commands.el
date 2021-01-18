@@ -116,10 +116,12 @@
 	 (decoded (bindat-unpack spec payload))
 	 (username (assoc-default 'username decoded)))
     (when-let ((account (epurple--find-account-by-username username)))
-      (with-struct-slots (active-p buddies) epurple-account account
+      (with-struct-slots (active-p auto-reconnect buddies chats) epurple-account account
 	(setq active-p nil)
 	(setq buddies nil)
-	(setq chats nil)))
+	(setq chats nil)
+	(when auto-reconnect
+	  (epurple-account-connect account))))
     (bindat-length spec '((username "")))))
 
 ;; buddies
