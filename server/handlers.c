@@ -219,7 +219,9 @@ static void buddies_get_all_handler(struct epurple *epurple, int id, char *paylo
 		if (buddy->server_alias)
 			strncpy(buddy_data->server_alias, buddy->server_alias, STR_NAME_SIZE);
 
-		create_conv(acct, PURPLE_CONV_TYPE_IM, buddy_data->name);
+		/* For Slack account, we need to create conv to get unread messages  */
+		if (!strcmp(account->protocol_id, "prpl-slack"))
+			create_conv(acct, PURPLE_CONV_TYPE_IM, buddy_data->name);
 	}
 	g_slist_free(buddies);
 
@@ -253,7 +255,9 @@ static void chats_get_all_handler(struct epurple *epurple, int id, char *payload
 				memset(chat_data, '\0',  STR_NAME_SIZE);
 				strncpy(chat_data, chat->alias, STR_NAME_SIZE);
 
-				create_conv(acct, PURPLE_CONV_TYPE_CHAT, chat->alias);
+				/* For Slack account, we need to create conv to get unread messages  */
+				if (!strcmp(account->protocol_id, "prpl-slack"))
+					create_conv(acct, PURPLE_CONV_TYPE_CHAT, chat->alias);
 			}
 		}
 		node = purple_blist_node_next(node, TRUE);
