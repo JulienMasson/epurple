@@ -218,15 +218,41 @@ static void disconnected(PurpleConnection *gc)
 	}
 }
 
+static void notice(PurpleConnection *gc, const char *text)
+{
+	printf("Notice: %s\n", text);
+}
+
+static void report_disconnect(PurpleConnection *gc, const char *text)
+{
+	printf("Report Disconnect: %s\n", text);
+}
+
+static void network_connected(void)
+{
+	printf("Network connected\n");
+}
+
+static void network_disconnected(void)
+{
+	printf("Network disconnected\n");
+}
+
+static void report_disconnect_reason(PurpleConnection *gc, PurpleConnectionError reason,
+				     const char *text)
+{
+	printf("Disconnect Reason: %s\n", text);
+}
+
 PurpleConnectionUiOps connection_ops = {
     connect_progress,
     connected,
     disconnected,
-    NULL, /* notice */
-    NULL, /* report_disconnect */
-    NULL, /* network_connected */
-    NULL, /* network_disconnected */
-    NULL, /* report_disconnect_reason */
+    notice,
+    report_disconnect,
+    network_connected,
+    network_disconnected,
+    report_disconnect_reason,
     NULL,
     NULL,
     NULL
