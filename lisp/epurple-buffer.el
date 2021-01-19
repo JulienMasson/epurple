@@ -87,6 +87,12 @@
   :group 'epurple
   :type 'string)
 
+(defcustom epurple-auto-mute nil
+  "Auto mute conversations when they are created"
+  :group 'epurple
+  :type '(repeat (list (string :tag "Account username")
+		       (string :tag "Conversation name"))))
+
 ;;; Internal Variables
 
 (defvar-local epurple--buffer nil)
@@ -315,15 +321,25 @@
 		(delete epurple--buffer prpl-buffers))
 	  (throw 'found nil))))))
 
+(defun epurple-buffer--auto-mute (account conv-name)
+  (let ((account-username (epurple-account-username account)))
+    (catch 'found
+      (pcase-dolist (`(,username ,name) epurple-auto-mute)
+	(when (and (string= account-username username)
+		   (string= conv-name name))
+	  (throw 'found t))))))
+
 (defun epurple-buffer--new (account type name d-name url)
   (let ((prpl-buffer (make-epurple-buffer))
 	(prpl-buffers (epurple-account-prpl-buffers account)))
-    (with-struct-slots (conv-type conv-name conv-url display-name buffer) epurple-buffer prpl-buffer
+    (with-struct-slots (conv-type conv-name conv-url display-name buffer mute-p)
+      epurple-buffer prpl-buffer
       (setq conv-type type)
       (setq conv-name name)
       (setq conv-url url)
       (setq display-name d-name)
       (setq buffer (epurple-buffer--setup account prpl-buffer display-name))
+      (setq mute-p (epurple-buffer--auto-mute account name))
       (push prpl-buffer prpl-buffers)
       (setf (epurple-account-prpl-buffers account) prpl-buffers)
       prpl-buffer)))
