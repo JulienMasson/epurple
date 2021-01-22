@@ -245,17 +245,17 @@ static void report_disconnect_reason(PurpleConnection *gc, PurpleConnectionError
 }
 
 PurpleConnectionUiOps connection_ops = {
-    connect_progress,
-    connected,
-    disconnected,
-    notice,
-    report_disconnect,
-    network_connected,
-    network_disconnected,
-    report_disconnect_reason,
-    NULL,
-    NULL,
-    NULL
+	connect_progress,
+	connected,
+	disconnected,
+	notice,
+	report_disconnect,
+	network_connected,
+	network_disconnected,
+	report_disconnect_reason,
+	NULL,
+	NULL,
+	NULL
 };
 
 /* conversation */
@@ -365,25 +365,25 @@ static gboolean has_focus(PurpleConversation *conv)
 }
 
 PurpleConversationUiOps conversation_ops = {
-    create_conversation,
-    destroy_conversation,
-    new_msg,
-    new_msg,
-    write_conv,
-    chat_add_users,
-    chat_rename_user,
-    chat_remove_users,
-    chat_update_user,
-    present,
-    has_focus,
-    NULL, /* custom_smiley_add */
-    NULL, /* custom_smiley_write */
-    NULL, /* custom_smiley_close */
-    send_confirm,
-    NULL,
-    NULL,
-    NULL,
-    NULL
+	create_conversation,
+	destroy_conversation,
+	new_msg,
+	new_msg,
+	write_conv,
+	chat_add_users,
+	chat_rename_user,
+	chat_remove_users,
+	chat_update_user,
+	present,
+	has_focus,
+	NULL, /* custom_smiley_add */
+	NULL, /* custom_smiley_write */
+	NULL, /* custom_smiley_close */
+	send_confirm,
+	NULL,
+	NULL,
+	NULL,
+	NULL
 };
 
 /* blist */
