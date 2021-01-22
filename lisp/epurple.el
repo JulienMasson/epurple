@@ -240,7 +240,12 @@
     ;; mark as read
     (with-current-buffer next-buffer
       (when (derived-mode-p 'lui-mode)
-	(epurple--mark-buffer-as-read next-buffer)))))
+	(epurple--mark-buffer-as-read next-buffer)))
+    ;; remove unread separator
+    (with-current-buffer prev-buffer
+      (when (and (derived-mode-p 'lui-mode)
+		 (not (eq prev-buffer next-buffer)))
+	(epurple-buffer-remove-unread-separator prev-buffer)))))
 (advice-add 'select-window :around #'epurple--select-window)
 
 ;;; External Functions

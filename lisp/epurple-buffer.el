@@ -75,6 +75,18 @@
   "Face used when buddy is offline"
   :group 'epurple-faces)
 
+(defface epurple-unread-face
+  '((((class color) (background light)) :foreground "coral4" :weight bold)
+    (((class color) (background  dark)) :foreground "coral2" :weight bold))
+  "Face for epurple unread msg"
+  :group 'epurple-faces)
+
+(defface epurple-unread-separator-face
+  '((((class color) (background light)) :strike-through "coral4" :extend t)
+    (((class color) (background  dark)) :strike-through "coral2" :extend t))
+  "Face for epurple unread separator msg"
+  :group 'epurple-faces)
+
 ;;; Customization
 
 (defcustom epurple-buffer-secs-timeout (* 5 60)
@@ -163,13 +175,64 @@
     (insert msg)
     (dom-texts (libxml-parse-html-region (point-min) (point)))))
 
+(defun epurple-buffer--unread-separator ()
+  (catch 'found
+    (save-excursion
+      (goto-char (point-max))
+      (goto-char (line-beginning-position))
+      (while (not (bobp))
+	(forward-line -1)
+	(dolist (ov (overlays-at (point)))
+	  (when (eq (overlay-get ov 'face) 'epurple-unread-separator-face)
+	    (throw 'found (point))))))))
+
+(defun epurple-buffer--remove-unread-separator ()
+  (save-excursion
+    (goto-char lui-output-marker)
+    (save-excursion
+      (when-let ((pos (epurple-buffer--unread-separator))
+		 (inhibit-read-only t))
+	(goto-char pos)
+	(mapc #'delete-overlay (overlays-at pos))
+	(delete-region pos (+ (line-end-position) 1))))
+    (set-marker lui-output-marker (point))))
+
+(defun epurple-buffer--insert-unread-separator (count)
+  (let* ((str (format "| %s unread messages |" count))
+	 (spaces-before (- (/ lui-fill-column 2) (/ (length str) 2)))
+	 (spaces-after (- lui-fill-column spaces-before))
+	 (fmt (format "%%-%ds%%-%ds" spaces-before spaces-after))
+	 (beg (line-beginning-position)))
+    (insert (format fmt "" (propertize str 'face 'epurple-unread-face)))
+    (overlay-put (make-overlay beg (+ beg spaces-before))
+                 'face 'epurple-unread-separator-face)
+    (overlay-put (make-overlay (+ beg spaces-before (length str))
+			       (+ beg lui-fill-column))
+                 'face 'epurple-unread-separator-face)))
+
+(defun epurple-buffer--update-unread-separator (buffer unread-count)
+  (with-current-buffer buffer
+    (save-excursion
+      (let ((inhibit-read-only t))
+	(if-let ((pos (epurple-buffer--unread-separator)))
+	    (progn
+	      (goto-char pos)
+	      (mapc #'delete-overlay (overlays-at pos))
+	      (delete-region pos (line-end-position))
+	      (epurple-buffer--insert-unread-separator unread-count))
+	  (goto-char lui-output-marker)
+	  (epurple-buffer--insert-unread-separator unread-count)
+	  (insert "\n")
+	  (set-marker lui-output-marker (point)))))))
+
 (defun epurple-buffer--incf-unread-count (account buffer)
   (when-let ((prpl-buffer (cl-find-if (lambda (prpl-buffer)
 					(eq buffer (epurple-buffer-buffer prpl-buffer)))
 				      (epurple-account-prpl-buffers account))))
     (with-struct-slots (unread-p unread-count) epurple-buffer prpl-buffer
       (setq unread-p t)
-      (setq unread-count (incf unread-count)))))
+      (setq unread-count (incf unread-count))
+      (epurple-buffer--update-unread-separator buffer unread-count))))
 
 (defun epurple-buffer--need-header-p (sender time)
   (let (previous-time previous-sender)
@@ -345,6 +408,18 @@
       prpl-buffer)))
 
 ;;; External Functions
+
+(defun epurple-buffer-remove-unread-separator (buffer)
+  (when (epurple--find-prpl-buffer buffer)
+    (with-current-buffer buffer
+      (epurple-buffer--remove-unread-separator))))
+
+(defun epurple-buffer-goto-unread-messages ()
+  (interactive)
+  (when (and (derived-mode-p 'lui-mode)
+	     (epurple--find-prpl-buffer (current-buffer)))
+    (when-let ((pos (epurple-buffer--unread-separator)))
+      (goto-char pos))))
 
 (defun epurple-open-url ()
   (interactive)
