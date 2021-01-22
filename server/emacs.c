@@ -56,7 +56,7 @@ gboolean emacs_handler(GIOChannel *in, GIOCondition cond, gpointer data)
 	if ((handler = handlers_find(header->command)))
 		handler->func(epurple, header->id, payload_buf, header->payload_size);
 	else
-		printf("Unknown command: %s\n", header->command);
+		LOGE("Unknown command: %s", header->command);
 	status = TRUE;
 
 payload_failed:

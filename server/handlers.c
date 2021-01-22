@@ -31,7 +31,7 @@ static void purple_init_handler(struct epurple *epurple, int id, char *payload, 
 	purple_eventloop_set_ui_ops(&eventloop_ops);
 
 	if (purple_get_core()) {
-		printf("libpurple already initialised\n");
+		LOGW("libpurple already initialised");
 		return;
 	}
 
@@ -84,7 +84,7 @@ static void account_connect_handler(struct epurple *epurple, int id, char *paylo
 	if ((acct = purple_accounts_find(account->username, account->protocol_id)))
 		purple_account_set_enabled(acct, EPURPLE_UI, TRUE);
 	else
-		printf("Cannot find account: %s %s\n", account->username, account->protocol_id);
+		LOGE("Cannot find account: %s %s", account->username, account->protocol_id);
 }
 
 static void account_disconnect_handler(struct epurple *epurple, int id, char *payload, size_t len)
@@ -95,7 +95,7 @@ static void account_disconnect_handler(struct epurple *epurple, int id, char *pa
 	if ((acct = purple_accounts_find(account->username, account->protocol_id)))
 		purple_account_set_enabled(acct, EPURPLE_UI, FALSE);
 	else
-		printf("Cannot find account: %s %s\n", account->username, account->protocol_id);
+		LOGE("Cannot find account: %s %s", account->username, account->protocol_id);
 }
 
 /* conv */
@@ -110,7 +110,7 @@ static PurpleConversation *create_conv(PurpleAccount *acct, int conv_type, char 
 {
 	PurpleConversation *conv;
 
-	printf("Creating conv: %d - %s\n", conv_type, conv_name);
+	LOGD("Creating conv: %d - %s", conv_type, conv_name);
 	conv = purple_conversation_new(conv_type, acct, conv_name);
 	if (!conv) return NULL;
 
@@ -138,7 +138,7 @@ static PurpleConversation *find_conv(PurpleAccount *acct, int conv_type, char *c
 
 static void get_conv_url(PurpleConversation *conv, char *conv_url, size_t len)
 {
-	printf("Not implemented yet !\n");
+	LOGW("Not implemented yet !");
 	snprintf(conv_url, len, "http://google.com/");
 }
 
@@ -174,7 +174,7 @@ static void update_conv_handler(struct epurple *epurple, int id, char *payload, 
 						     acct);
 	if (!conv) return;
 
-	printf("purple_conversation_update\n");
+	LOGD("purple_conversation_update");
 	purple_conversation_update(conv, PURPLE_CONV_UPDATE_UNSEEN);
 }
 
@@ -267,6 +267,13 @@ static void chats_get_all_handler(struct epurple *epurple, int id, char *payload
 	free(chats_data);
 }
 
+/* log level */
+static void log_level_handler(struct epurple *epurple, int id, char *payload, size_t len)
+{
+	log_level = *(int *)payload;
+	LOGI("Set log level: %d", log_level);
+}
+
 /* msg */
 struct send_msg_data {
 	char username[STR_NAME_SIZE];
@@ -306,6 +313,7 @@ struct handler handlers[] = {
 	{"buddies_get_all",    buddies_get_all_handler},
 	{"chats_get_all",      chats_get_all_handler},
 	{"find_conv",          find_conv_handler},
+	{"log_level",          log_level_handler},
 	{"update_conv",        update_conv_handler},
 	{"purple_init",        purple_init_handler},
 	{"send_msg",           send_msg_handler}

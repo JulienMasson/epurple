@@ -113,6 +113,8 @@
 
 ;;; External Variables
 
+(defvar epurple-log-levels '("SILENT" "ERROR" "WARN" "INFO" "DEBUG"))
+
 (defvar epurple-accounts nil)
 
 ;;; Internal Functions
@@ -316,5 +318,9 @@
 (defun epurple-init ()
   (interactive)
   (epurple-server-init))
+
+(defun epurple-set-log-level (log-level)
+  (interactive (list (completing-read "Set log level: " epurple-log-levels)))
+  (epurple-update-log-level (cl-position log-level epurple-log-levels)))
 
 (provide 'epurple)

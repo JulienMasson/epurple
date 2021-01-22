@@ -34,6 +34,8 @@
 #include <libpurple/debug.h>
 #include <libpurple/eventloop.h>
 
+#include "log.h"
+
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
 #define STR_NAME_SIZE 80
 #define EPURPLE_UI    "epurple"
@@ -50,6 +52,7 @@ struct epurple_event {
 struct epurple {
 	int sock_fd;
 	int emacs_fd;
+	int log_level;
 };
 
 struct epurple *epurple_get(void);

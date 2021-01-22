@@ -68,7 +68,7 @@ static int wait_connection()
 	epurple.emacs_fd = emacs_fd;
 	emacs_channel = g_io_channel_unix_new(emacs_fd);
 	g_io_add_watch(emacs_channel, G_IO_IN | G_IO_PRI, emacs_handler, &epurple);
-	printf("Got connexion\n");
+	LOGI("Server connected to Emacs");
 
 	return 0;
 }

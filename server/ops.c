@@ -37,13 +37,13 @@ static void purple_disconnect_all(void)
 static void chat_buddy_joined(PurpleConversation *conv, const char *user,
 			      PurpleConvChatBuddyFlags flags, gboolean new_arrival, void *data)
 {
-	printf("chat_buddy_joined\n");
+	LOGD("chat_buddy_joined");
 }
 
 static void chat_buddy_left(PurpleConversation *conv, const char *user, const char *reason,
 			    void *data)
 {
-	printf("chat_buddy_left\n");
+	LOGD("chat_buddy_left");
 }
 
 struct buddy_typing_update_data {
@@ -79,7 +79,7 @@ static void buddy_typing_update(PurpleAccount *account, const char *name, void *
 
 	buddy_typing_update_data.typing = typing;
 
-	printf("buddy_typing_update: %s -> %d\n", name, typing);
+	LOGD("buddy_typing_update: %s -> %d", name, typing);
 	emacs_send(epurple, "buddy_typing_update", 0, (char *)&buddy_typing_update_data,
 		   sizeof(struct buddy_typing_update_data));
 }
@@ -189,7 +189,7 @@ static void connect_progress(PurpleConnection *gc,const char *text, size_t step,
 {
 	PurpleAccount *acct = purple_connection_get_account(gc);
 	if (acct)
-		printf("Account progress: %s\n", acct->username);
+		LOGI("Account progress: %s", acct->username);
 }
 
 static void connected(PurpleConnection *gc)
@@ -199,7 +199,7 @@ static void connected(PurpleConnection *gc)
 	char username[STR_NAME_SIZE];
 
 	if (acct) {
-		printf("Account connected: %s\n", acct->username);
+		LOGI("Account connected: %s", acct->username);
 		strncpy(username, acct->username, STR_NAME_SIZE);
 		emacs_send(epurple, "account_connected", 0, username, STR_NAME_SIZE);
 	}
@@ -212,7 +212,7 @@ static void disconnected(PurpleConnection *gc)
 	char username[STR_NAME_SIZE];
 
 	if (acct) {
-		printf("Account disconnected: %s\n", acct->username);
+		LOGI("Account disconnected: %s", acct->username);
 		strncpy(username, acct->username, STR_NAME_SIZE);
 		emacs_send(epurple, "account_disconnected", 0, username, STR_NAME_SIZE);
 	}
@@ -220,28 +220,28 @@ static void disconnected(PurpleConnection *gc)
 
 static void notice(PurpleConnection *gc, const char *text)
 {
-	printf("Notice: %s\n", text);
+	LOGD("Notice: %s", text);
 }
 
 static void report_disconnect(PurpleConnection *gc, const char *text)
 {
-	printf("Report Disconnect: %s\n", text);
+	LOGD("Report Disconnect: %s", text);
 }
 
 static void network_connected(void)
 {
-	printf("Network connected\n");
+	LOGI("Network connected");
 }
 
 static void network_disconnected(void)
 {
-	printf("Network disconnected\n");
+	LOGI("Network disconnected");
 }
 
 static void report_disconnect_reason(PurpleConnection *gc, PurpleConnectionError reason,
 				     const char *text)
 {
-	printf("Disconnect Reason: %s\n", text);
+	LOGW("Disconnect Reason: %s", text);
 }
 
 PurpleConnectionUiOps connection_ops = {
@@ -272,12 +272,12 @@ struct new_msg_header {
 
 static void create_conversation(PurpleConversation *conv)
 {
-	printf("create_conversation\n");
+	LOGD("create_conversation");
 }
 
 static void destroy_conversation(PurpleConversation *conv)
 {
-	printf("destroy_conversation\n");
+	LOGD("destroy_conversation");
 }
 
 static void new_msg(PurpleConversation *conv, const char *who, const char *message,
@@ -316,7 +316,7 @@ static void new_msg(PurpleConversation *conv, const char *who, const char *messa
 	memset(data + msg_header_size, '\0', msg_header.msg_size);
 	memcpy(data + msg_header_size, message, msg_header.msg_size);
 
-	printf("new_msg: %s -> %d: %s\n", who, msg_header.msg_size, message);
+	LOGD("new_msg: %s -> %d: %s", who, msg_header.msg_size, message);
 	emacs_send(epurple, "new_msg", 0, data, data_size);
 	free(data);
 }
@@ -324,43 +324,43 @@ static void new_msg(PurpleConversation *conv, const char *who, const char *messa
 static void write_conv(PurpleConversation *conv, const char *name, const char *alias,
 		       const char *message, PurpleMessageFlags flags, time_t mtime)
 {
-	printf("write_conv: %s (%s) -> %s\n", name, alias, message);
+	LOGD("write_conv: %s (%s) -> %s", name, alias, message);
 }
 
 static void chat_add_users(PurpleConversation *conv, GList *cbuddies, gboolean new_arrivals)
 {
-	printf("chat_add_users\n");
+	LOGD("chat_add_users");
 }
 
 static void chat_remove_users(PurpleConversation *conv, GList *users)
 {
-	printf("chat_remove_users\n");
+	LOGD("chat_remove_users");
 }
 
 static void chat_rename_user(PurpleConversation *conv, const char *old_name,
 			     const char *new_name, const char *new_alias)
 {
-	printf("chat_rename_user\n");
+	LOGD("chat_rename_user");
 }
 
 static void chat_update_user(PurpleConversation *conv, const char *user)
 {
-	printf("chat_update_user\n");
+	LOGD("chat_update_user");
 }
 
 static void present(PurpleConversation *conv)
 {
-	printf("present\n");
+	LOGD("present");
 }
 
 static void send_confirm(PurpleConversation *conv, const char *message)
 {
-	printf("send_confirm\n");
+	LOGD("send_confirm");
 }
 
 static gboolean has_focus(PurpleConversation *conv)
 {
-	printf("has_focus");
+	LOGD("has_focus");
 	return TRUE;
 }
 
@@ -420,8 +420,8 @@ static void blist_update(PurpleBuddyList *list, PurpleBlistNode *node)
 		if (!presence) return;
 		buddy_update_data.available = purple_presence_is_available(presence);
 
-		printf("Update: %s -> %d (%s)\n", buddy_update_data.buddy_name,
-		       buddy_update_data.available, buddy_update_data.icon);
+		LOGD("Update: %s -> %d (%s)", buddy_update_data.buddy_name,
+		     buddy_update_data.available, buddy_update_data.icon);
 		emacs_send(epurple, "buddy_update", 0, (char *)&buddy_update_data,
 			   sizeof(struct buddy_update_data));
 	}

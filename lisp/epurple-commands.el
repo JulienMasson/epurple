@@ -226,6 +226,13 @@
 		     (conv-name   . ,conv-name))))
       (epurple--send "update_conv" payload epurple--conv-spec))))
 
+;; log level
+(defvar epurple--log-level-spec '((log-level u32r)))
+
+(defun epurple-update-log-level (log-level)
+  (let ((payload `((log-level . ,log-level))))
+    (epurple--send "log_level" payload epurple--log-level-spec)))
+
 ;; msg
 (defvar epurple--send-msg-spec nil)
 
