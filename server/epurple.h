@@ -36,8 +36,6 @@
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
 #define STR_NAME_SIZE 80
-#define MAX_BUF_SIZE  4096
-#define MAX_MSG_SIZE  512
 #define EPURPLE_UI    "epurple"
 
 struct epurple;

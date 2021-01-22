@@ -22,32 +22,49 @@
 struct header {
 	char command[STR_NAME_SIZE];
 	int id;
+	int payload_size;
 };
 
 gboolean emacs_handler(GIOChannel *in, GIOCondition cond, gpointer data)
 {
-	char buf[MAX_BUF_SIZE];
-	size_t buffer_len;
 	int fd = g_io_channel_unix_get_fd(in);
 	struct epurple *epurple = (struct epurple *)data;
+	gboolean status = FALSE;
 
-	memset(buf, '\0', sizeof(buf));
-	if ((buffer_len = read(fd, buf, MAX_BUF_SIZE)) == -1) {
-		perror("Failed to read");
-		return FALSE;
+	/* read header */
+	size_t header_size = sizeof(struct header);
+	char *header_buf = malloc(header_size);
+	memset(header_buf, '\0', header_size);
+
+	if (read(fd, header_buf, header_size) == -1) {
+		perror("Failed to read header");
+		goto header_failed;
+	}
+	struct header *header = (struct header *)header_buf;
+
+	/* read payload */
+	char *payload_buf = malloc(header->payload_size);
+	memset(payload_buf, '\0', header->payload_size);
+
+	if (read(fd, payload_buf, header->payload_size) == -1) {
+		perror("Failed to read payload");
+		goto payload_failed;
 	}
 
-	struct header *header = (struct header *)buf;
-	size_t header_len = sizeof(struct header);
-	char *payload = buf + header_len;
+	/* pass payload to handler */
 	struct handler *handler;
-
 	if ((handler = handlers_find(header->command)))
-		handler->func(epurple, header->id, payload, buffer_len - header_len);
+		handler->func(epurple, header->id, payload_buf, header->payload_size);
 	else
 		printf("Unknown command: %s\n", header->command);
+	status = TRUE;
 
-	return TRUE;
+payload_failed:
+	free(payload_buf);
+header_failed:
+	free(header_buf);
+
+	return status;
 }
 
 void emacs_send(struct epurple *epurple, char *command, int id, char *payload, size_t len)
@@ -61,6 +78,7 @@ void emacs_send(struct epurple *epurple, char *command, int id, char *payload, s
 	if (command)
 		strncpy(header->command, command, STR_NAME_SIZE);
 	header->id = id;
+	header->payload_size = len;
 	if (payload)
 		memcpy(payload_buf, payload, len);
 

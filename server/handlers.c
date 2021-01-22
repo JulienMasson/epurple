@@ -273,12 +273,12 @@ struct send_msg_data {
 	char protocol_id[STR_NAME_SIZE];
 	int  conv_type;
 	char conv_name[STR_NAME_SIZE];
-	char msg[MAX_MSG_SIZE];
 };
 
 static void send_msg_handler(struct epurple *epurple, int id, char *payload, size_t len)
 {
 	struct send_msg_data *send_msg = (struct send_msg_data *)payload;
+	char *msg = payload + sizeof(struct send_msg_data);
 	PurpleAccount *acct;
 	PurpleConversation *conv;
 
@@ -291,9 +291,9 @@ static void send_msg_handler(struct epurple *epurple, int id, char *payload, siz
 	if (!conv) return;
 
 	if (send_msg->conv_type == PURPLE_CONV_TYPE_IM)
-		purple_conv_im_send(PURPLE_CONV_IM(conv), send_msg->msg);
+		purple_conv_im_send(PURPLE_CONV_IM(conv), msg);
 	else if (send_msg->conv_type == PURPLE_CONV_TYPE_CHAT)
-		purple_conv_chat_send(PURPLE_CONV_CHAT(conv), send_msg->msg);
+		purple_conv_chat_send(PURPLE_CONV_CHAT(conv), msg);
 	else
 		printf("Unknown conv type\n");
 }

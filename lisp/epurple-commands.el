@@ -25,11 +25,16 @@
 
 ;;; Internal Variables
 
-(defvar epurple--header-spec '((command strz 80)
-			       (id      u32r)))
-(defvar epurple--header-length (bindat-length epurple--header-spec
-					      '((command "") (id 0))))
+(defvar epurple--header-spec '((command      strz 80)
+			       (id           u32r)
+			       (payload-size u32r)))
 
+(defvar epurple--header-length (bindat-length epurple--header-spec
+					      '((command "")
+						(id 0)
+						(payload-size 0))))
+
+(defvar epurple--payload-spec nil)
 (defvar epurple--queue nil)
 (defvar epurple--id 1)
 
@@ -45,12 +50,15 @@
 
 (defun epurple--send (command payload payload-spec &optional cb)
   (cl-incf epurple--id)
+  (setq epurple--payload-spec payload-spec)
   (let* ((buf-spec (if payload
 		       `((header struct epurple--header-spec)
-			 (data   struct ,payload-spec))
+			 (data   struct epurple--payload-spec))
 		     '((header struct epurple--header-spec))))
-	 (header `(header . ((command . ,command)
-			     (id      . ,epurple--id))))
+	 (payload-size (if payload (bindat-length payload-spec payload) 0))
+	 (header `(header . ((command      . ,command)
+			     (id           . ,epurple--id)
+			     (payload-size . ,payload-size))))
 	 (data `(data . ,payload))
 	 (struct (if payload (list header data) (list header)))
 	 (buf (bindat-pack buf-spec struct)))
@@ -65,8 +73,7 @@
   (epurple--send "purple_init" nil nil))
 
 (defun epurple-purple-init-done (payload)
-  (epurple-accounts-get-all #'epurple--accounts-info)
-  0)
+  (epurple-accounts-get-all #'epurple--accounts-info))
 
 ;; accounts
 (defvar epurple--account-spec '((username    strz 80)
@@ -80,8 +87,7 @@
 	 (length (/ (length payload) account-length))
 	 (spec `((accounts repeat ,length (struct epurple--account-spec))))
 	 (decoded (bindat-unpack spec payload)))
-    (funcall cb (assoc-default 'accounts decoded))
-    (length payload)))
+    (funcall cb (assoc-default 'accounts decoded))))
 
 (defun epurple-accounts-get-all (cb)
   (epurple--send "accounts_get_all" nil nil
@@ -92,7 +98,7 @@
     (let ((payload `((username    . ,username)
 		     (alias       . ,alias)
 		     (protocol-id . ,protocol-id))))
-      (epurple--send "account_connect" payload 'epurple--account-spec))))
+      (epurple--send "account_connect" payload epurple--account-spec))))
 
 (defun epurple-account-connected (payload)
   (let* ((spec '((username strz 80)))
@@ -101,15 +107,14 @@
     (when-let ((account (epurple--find-account-by-username username)))
       (setf (epurple-account-active-p account) t)
       (epurple-buddies-get-all account (apply-partially #'epurple--buddies-info
-							account)))
-    (bindat-length spec '((username "")))))
+							account)))))
 
 (defun epurple-account-disconnect (account)
   (with-struct-slots (username alias protocol-id) epurple-account account
     (let ((payload `((username    . ,username)
 		     (alias       . ,alias)
 		     (protocol-id . ,protocol-id))))
-      (epurple--send "account_disconnect" payload 'epurple--account-spec))))
+      (epurple--send "account_disconnect" payload epurple--account-spec))))
 
 (defun epurple-account-disconnected (payload)
   (let* ((spec '((username strz 80)))
@@ -121,8 +126,7 @@
 	(setq buddies nil)
 	(setq chats nil)
 	(when auto-reconnect
-	  (epurple-account-connect account))))
-    (bindat-length spec '((username "")))))
+	  (epurple-account-connect account))))))
 
 ;; buddies
 (defvar epurple--buddy-spec '((name         strz 80)
@@ -136,15 +140,14 @@
 	 (length (/ (length payload) buddy-length))
 	 (spec `((buddys repeat ,length (struct epurple--buddy-spec))))
 	 (decoded (bindat-unpack spec payload)))
-    (funcall cb (assoc-default 'buddys decoded))
-    (length payload)))
+    (funcall cb (assoc-default 'buddys decoded))))
 
 (defun epurple-buddies-get-all (account cb)
   (with-struct-slots (username alias protocol-id) epurple-account account
     (let ((payload `((username    . ,username)
 		     (alias       . ,alias)
 		     (protocol-id . ,protocol-id))))
-      (epurple--send "buddies_get_all" payload 'epurple--account-spec
+      (epurple--send "buddies_get_all" payload epurple--account-spec
 		     (apply-partially #'epurple-buddies-get-all-cb cb)))))
 
 (defun epurple-buddy-typing-update (payload)
@@ -158,9 +161,7 @@
 		  (buddy-name (decode-coding-string .buddy-name 'utf-8))
 		  (buddy (epurple--find-buddy account buddy-name)))
 	(setf (epurple-buddy-typing-p buddy) (not (zerop .typing)))
-	(epurple-buffer-update account .conv-name)))
-    (bindat-length spec '((account-username "") (buddy-name "")
-			  (conv-name "") (typing 0)))))
+	(epurple-buffer-update account .conv-name)))))
 
 (defun epurple-buddy-update (payload)
   (let* ((spec '((account-username strz 80)
@@ -175,9 +176,7 @@
 	(with-struct-slots (icon signed-on) epurple-buddy buddy
 	  (setq icon .icon)
 	  (setq signed-on (not (zerop .online)))
-	  (epurple-buffer-update account .buddy-name))))
-    (bindat-length spec '((account-username "") (buddy-name "")
-			  (icon "") (online 0)))))
+	  (epurple-buffer-update account .buddy-name))))))
 
 ;; chats
 (defvar epurple--chat-spec '((name strz 80)))
@@ -187,15 +186,14 @@
 	 (length (/ (length payload) chat-length))
 	 (spec `((chats repeat ,length (struct epurple--chat-spec))))
 	 (decoded (bindat-unpack spec payload)))
-    (funcall cb (assoc-default 'chats decoded))
-    (length payload)))
+    (funcall cb (assoc-default 'chats decoded))))
 
 (defun epurple-chats-get-all (account cb)
   (with-struct-slots (username alias protocol-id) epurple-account account
     (let ((payload `((username    . ,username)
 		     (alias       . ,alias)
 		     (protocol-id . ,protocol-id))))
-      (epurple--send "chats_get_all" payload 'epurple--account-spec
+      (epurple--send "chats_get_all" payload epurple--account-spec
 		     (apply-partially #'epurple-chats-get-all-cb cb)))))
 
 ;; conv
@@ -208,8 +206,7 @@
   (let* ((spec '((conv-url strz 80)))
 	 (decoded (bindat-unpack spec payload)))
     (let-alist decoded
-      (funcall cb account conv-type conv-name display-name .conv-url)
-      (length payload))))
+      (funcall cb account conv-type conv-name display-name .conv-url))))
 
 (defun epurple-find-conv (account conv-type conv-name display-name cb)
   (with-struct-slots (username protocol-id) epurple-account account
@@ -217,7 +214,7 @@
 		     (protocol-id . ,protocol-id)
 		     (conv-type   . ,conv-type)
 		     (conv-name   . ,conv-name))))
-      (epurple--send "find_conv" payload 'epurple--conv-spec
+      (epurple--send "find_conv" payload epurple--conv-spec
 		     (apply-partially #'epurple-find-conv-cb
 				      cb account conv-type conv-name display-name)))))
 
@@ -227,25 +224,27 @@
 		     (protocol-id . ,protocol-id)
 		     (conv-type   . ,conv-type)
 		     (conv-name   . ,conv-name))))
-      (epurple--send "update_conv" payload 'epurple--conv-spec))))
+      (epurple--send "update_conv" payload epurple--conv-spec))))
 
 ;; msg
-(defvar epurple--send-msg-spec '((username    strz 80)
-				 (protocol-id strz 80)
-				 (conv-type   u32r)
-				 (conv-name   strz 80)
-				 (msg         strz 512)))
+(defvar epurple--send-msg-spec nil)
 
 (defun epurple-send-msg (account prpl-buffer msg)
   (with-struct-slots (username protocol-id) epurple-account account
     (with-struct-slots (conv-type conv-name) epurple-buffer prpl-buffer
       (let* ((name (encode-coding-string conv-name 'utf-8))
+	     (msg (encode-coding-string msg 'utf-8))
 	     (payload `((username    . ,username)
 			(protocol-id . ,protocol-id)
 			(conv-type   . ,conv-type)
 			(conv-name   . ,name)
 			(msg         . ,msg))))
-	(epurple--send "send_msg" payload 'epurple--send-msg-spec)))))
+	(setq epurple--send-msg-spec `((username    strz 80)
+				       (protocol-id strz 80)
+				       (conv-type   u32r)
+				       (conv-name   strz 80)
+				       (msg         strz ,(length msg))))
+	(epurple--send "send_msg" payload epurple--send-msg-spec)))))
 
 (defun epurple-new-msg (payload)
   (let* ((spec '((username   strz 80)
@@ -268,29 +267,38 @@
 	 (decoded (bindat-unpack spec payload-msg-data)))
     (let-alist decoded
       (epurple-buffer-new-msg decoded(substring payload msg-data-length
-						(+ msg-data-length .msg-size)))
-      (+ msg-data-length .msg-size))))
+						(+ msg-data-length .msg-size))))))
 
 ;; handler
 (defun epurple-commands-handler (data)
-  (let (payload-length)
-    (catch 'remaining-data
-      (while data
-	(let* ((header (substring data 0 epurple--header-length))
-	       (payload (substring data epurple--header-length (length data)))
-	       (decoded (bindat-unpack epurple--header-spec header)))
-	  (let-alist decoded
-	    (if-let ((resp (assoc-default .id epurple--queue)))
-		(progn
-		  (setq payload-length (funcall resp payload))
-		  (setq epurple--queue (assq-delete-all .id epurple--queue)))
-	      (if-let ((handler (assoc-default .command epurple--handlers)))
-		  (setq payload-length (funcall handler payload))
-		(throw 'remaining-data data))))
-	  (if (= (+ epurple--header-length payload-length) (length data))
-	      (setq data nil)
-	    (setq data (substring data (+ epurple--header-length payload-length)
-				  (length data)))))))
-    data))
+  (catch 'remaining-data
+    (while data
+      (let* ((header (substring data 0 epurple--header-length))
+	     (decoded (bindat-unpack epurple--header-spec header)))
+	(let-alist decoded
+	  ;; data size should be greater than header + payload size
+	  ;; otherwise that means we have not received yet all the data
+	  (if (< (length data) (+ epurple--header-length .payload-size))
+	      (throw 'remaining-data data)
+	    (let ((payload (substring data epurple--header-length
+				      (+ epurple--header-length .payload-size)))
+		  (data-size (+ epurple--header-length .payload-size)))
+	      ;; check in callbacks queue
+	      (if-let ((resp (assoc-default .id epurple--queue)))
+		  (progn
+		    (funcall resp payload)
+		    (setq epurple--queue (assq-delete-all .id epurple--queue)))
+		;; check in handlers
+		(if-let ((handler (assoc-default .command epurple--handlers)))
+		    (funcall handler payload)
+		  ;; data can not be handled
+		  (setq data nil)
+		  (message "epurple: data not handled")
+		  (throw 'remaining-data data)))
+	      ;; remove data handled
+	      (if (= data-size (length data))
+		  (setq data nil)
+		(setq data (substring data data-size (length data))))))))))
+  data)
 
 (provide 'epurple-commands)
