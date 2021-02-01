@@ -24,6 +24,8 @@
 (require 'dom)
 (require 'lui)
 
+(require 'epurple-company)
+
 ;;; Struct
 
 (cl-defstruct epurple-buffer
@@ -46,6 +48,7 @@
 (define-derived-mode epurple-mode lui-mode "Epurple"
   "Epurple major mode."
   (lui-set-prompt lui-prompt-string)
+  (epurple-company-setup)
   (add-hook 'kill-buffer-hook #'epurple-buffer--killed nil t))
 
 ;;; Faces
