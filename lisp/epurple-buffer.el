@@ -50,6 +50,11 @@
 
 ;;; Faces
 
+(defface epurple-mention-face
+  '((t (:foreground "#1e90ff")))
+  "Face used to `@|#'"
+  :group 'epurple-faces)
+
 (defface epurple-blockquote-face
   '((t (:inherit font-lock-doc-face)))
   "Face used to `>'"
@@ -108,6 +113,8 @@
 ;;; Internal Variables
 
 (defvar-local epurple--buffer nil)
+
+(defconst epurple-mention-regexp "\\([@#][[:alpha:]]+\\)")
 
 (defconst epurple-blockquote-regexp
   "^[ \t]*\\([A-Z]?>\\)\\([ \t]*\\)\\(.+\\)$")
@@ -249,6 +256,12 @@
 	       epurple-buffer-secs-timeout))
       t)))
 
+(defun epurple-buffer--mrkdwn-mention ()
+  (while (re-search-forward epurple-mention-regexp (point-max) t)
+    (when-let ((beg (match-beginning 1))
+               (end (match-end 1)))
+      (put-text-property beg end 'face 'epurple-mention-face))))
+
 (defun epurple-buffer--mrkdwn-blockquote ()
   (while (re-search-forward epurple-blockquote-regexp (point-max) t)
     (when-let ((markup-beg (match-beginning 1))
@@ -287,7 +300,8 @@
 (defun epurple-buffer--mrkdwn-fontify (text)
   (with-temp-buffer
     (insert text)
-    (dolist (func (list #'epurple-buffer--mrkdwn-blockquote
+    (dolist (func (list #'epurple-buffer--mrkdwn-mention
+			#'epurple-buffer--mrkdwn-blockquote
 			#'epurple-buffer--mrkdwn-block-code
 			#'epurple-buffer--mrkdwn-inline-code))
       (goto-char (point-min))
