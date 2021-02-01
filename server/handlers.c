@@ -285,7 +285,6 @@ struct send_msg_data {
 static void send_msg_handler(struct epurple *epurple, int id, char *payload, size_t len)
 {
 	struct send_msg_data *send_msg = (struct send_msg_data *)payload;
-	char *msg = payload + sizeof(struct send_msg_data);
 	PurpleAccount *acct;
 	PurpleConversation *conv;
 
@@ -297,12 +296,20 @@ static void send_msg_handler(struct epurple *epurple, int id, char *payload, siz
 						     acct);
 	if (!conv) return;
 
+	size_t msg_len = len - sizeof(struct send_msg_data);
+	char *msg = malloc(msg_len + 1);
+	memcpy(msg, payload + sizeof(struct send_msg_data), msg_len);
+	msg[msg_len] = '\0';
+
+	LOGD("Send msg: %s", msg);
 	if (send_msg->conv_type == PURPLE_CONV_TYPE_IM)
 		purple_conv_im_send(PURPLE_CONV_IM(conv), msg);
 	else if (send_msg->conv_type == PURPLE_CONV_TYPE_CHAT)
 		purple_conv_chat_send(PURPLE_CONV_CHAT(conv), msg);
 	else
 		printf("Unknown conv type\n");
+
+	free(msg);
 }
 
 /* handlers */
