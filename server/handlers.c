@@ -19,6 +19,7 @@
 #include "emacs.h"
 #include "handlers.h"
 #include "ops.h"
+#include "protocol.h"
 
 /* purple */
 static void purple_init_handler(struct epurple *epurple, int id, char *payload, size_t len)
@@ -106,7 +107,7 @@ struct conv_data {
 	char conv_name[STR_NAME_SIZE];
 };
 
-static PurpleConversation *create_conv(PurpleAccount *acct, int conv_type, char *conv_name)
+PurpleConversation *create_conv(PurpleAccount *acct, int conv_type, char *conv_name)
 {
 	PurpleConversation *conv;
 
@@ -136,28 +137,18 @@ static PurpleConversation *find_conv(PurpleAccount *acct, int conv_type, char *c
 	return conv;
 }
 
-static void get_conv_url(PurpleConversation *conv, char *conv_url, size_t len)
-{
-	LOGW("Not implemented yet !");
-	snprintf(conv_url, len, "http://google.com/");
-}
-
 static void find_conv_handler(struct epurple *epurple, int id, char *payload, size_t len)
 {
 	struct conv_data *conv_data = (struct conv_data *)payload;
 	PurpleAccount *acct;
 	PurpleConversation *conv;
-	char conv_url[STR_NAME_SIZE];
 
 	acct = purple_accounts_find(conv_data->username, conv_data->protocol_id);
 	if (!acct) return;
 
 	conv = find_conv(acct, conv_data->conv_type, conv_data->conv_name);
-	if (conv) {
-		memset(conv_url, '\0', STR_NAME_SIZE);
-		get_conv_url(conv, conv_url, STR_NAME_SIZE);
-		emacs_send(epurple, NULL, id, conv_url, STR_NAME_SIZE);
-	}
+	if (conv)
+		emacs_ack(epurple, id);
 }
 
 static void update_conv_handler(struct epurple *epurple, int id, char *payload, size_t len)
@@ -179,12 +170,6 @@ static void update_conv_handler(struct epurple *epurple, int id, char *payload, 
 }
 
 /* buddies */
-struct buddy_data {
-	char name[STR_NAME_SIZE];
-	char alias[STR_NAME_SIZE];
-	char server_alias[STR_NAME_SIZE];
-};
-
 static void buddies_get_all_handler(struct epurple *epurple, int id, char *payload, size_t len)
 {
 	struct account *account = (struct account *)payload;
@@ -208,20 +193,11 @@ static void buddies_get_all_handler(struct epurple *epurple, int id, char *paylo
 		buddy_data = buddies_data + count - 1;
 
 		memset(buddy_data->name, '\0',  STR_NAME_SIZE);
-		if (buddy->name)
-			strncpy(buddy_data->name, buddy->name, STR_NAME_SIZE);
+		memset(buddy_data->display_name, '\0',  STR_NAME_SIZE);
+		memset(buddy_data->url, '\0',  STR_URL_SIZE);
 
-		memset(buddy_data->alias, '\0',  STR_NAME_SIZE);
-		if (buddy->alias)
-			strncpy(buddy_data->alias, buddy->alias, STR_NAME_SIZE);
-
-		memset(buddy_data->server_alias, '\0',  STR_NAME_SIZE);
-		if (buddy->server_alias)
-			strncpy(buddy_data->server_alias, buddy->server_alias, STR_NAME_SIZE);
-
-		/* For Slack account, we need to create conv to get unread messages  */
-		if (!strcmp(account->protocol_id, "prpl-slack"))
-			create_conv(acct, PURPLE_CONV_TYPE_IM, buddy_data->name);
+		protocol_fill_buddy(account->protocol_id, buddy, buddy_data);
+		protocol_hook_buddy(account->protocol_id, acct, buddy);
 	}
 	g_slist_free(buddies);
 
@@ -255,9 +231,7 @@ static void chats_get_all_handler(struct epurple *epurple, int id, char *payload
 				memset(chat_data, '\0',  STR_NAME_SIZE);
 				strncpy(chat_data, chat->alias, STR_NAME_SIZE);
 
-				/* For Slack account, we need to create conv to get unread messages  */
-				if (!strcmp(account->protocol_id, "prpl-slack"))
-					create_conv(acct, PURPLE_CONV_TYPE_CHAT, chat->alias);
+				protocol_hook_chat(account->protocol_id, acct, chat);
 			}
 		}
 		node = purple_blist_node_next(node, TRUE);

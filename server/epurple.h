@@ -38,6 +38,7 @@
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
 #define STR_NAME_SIZE 80
+#define STR_URL_SIZE  128
 #define EPURPLE_UI    "epurple"
 
 struct epurple;

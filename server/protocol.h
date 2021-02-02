@@ -1,4 +1,4 @@
-/* Copyright (C) 2020  Julien Masson
+/* Copyright (C) 2021  Julien Masson
  *
  * Author: Julien Masson <massonju.eseo@gmail.com>
  *
@@ -16,24 +16,14 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef HANDLERS_H
-#define HANDLERS_H
+#ifndef PROTOCOL_H
+#define PROTOCOL_H
 
 #include "epurple.h"
+#include "handlers.h"
 
-struct buddy_data {
-	char name[STR_NAME_SIZE];
-	char display_name[STR_NAME_SIZE];
-	char url[STR_URL_SIZE];
-};
-
-struct handler {
-	char command[STR_NAME_SIZE];
-	void (*func)(struct epurple *epurple, int id, char *payload, size_t len);
-};
-
-struct handler *handlers_find(char *command);
-
-PurpleConversation *create_conv(PurpleAccount *acct, int conv_type, char *conv_name);
+void protocol_fill_buddy(char *protocol_id, PurpleBuddy *buddy, struct buddy_data *data);
+void protocol_hook_buddy(char *protocol_id, PurpleAccount *acct, PurpleBuddy *buddy);
+void protocol_hook_chat(char *protocol_id, PurpleAccount *acct, PurpleChat *chat);
 
 #endif

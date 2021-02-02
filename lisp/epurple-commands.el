@@ -130,13 +130,13 @@
 
 ;; buddies
 (defvar epurple--buddy-spec '((name         strz 80)
-			      (alias        strz 80)
-			      (server-alias strz 80)))
+			      (display-name strz 80)
+			      (url          strz 128)))
 
 (defun epurple-buddies-get-all-cb (cb payload)
   (let* ((buddy-length (bindat-length epurple--buddy-spec '((name "")
-							    (alias "")
-							    (server-alias ""))))
+							    (display-name "")
+							    (url ""))))
 	 (length (/ (length payload) buddy-length))
 	 (spec `((buddys repeat ,length (struct epurple--buddy-spec))))
 	 (decoded (bindat-unpack spec payload)))
@@ -203,10 +203,7 @@
 			     (conv-name   strz 80)))
 
 (defun epurple-find-conv-cb (cb account conv-type conv-name display-name payload)
-  (let* ((spec '((conv-url strz 80)))
-	 (decoded (bindat-unpack spec payload)))
-    (let-alist decoded
-      (funcall cb account conv-type conv-name display-name .conv-url))))
+  (funcall cb account conv-type conv-name display-name))
 
 (defun epurple-find-conv (account conv-type conv-name display-name cb)
   (with-struct-slots (username protocol-id) epurple-account account

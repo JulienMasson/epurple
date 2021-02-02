@@ -37,8 +37,8 @@
 
 (cl-defstruct epurple-buddy
   name
-  alias
-  server-alias
+  display-name
+  url
   icon
   status
   signed-on
@@ -189,11 +189,10 @@
 (defun epurple--prompt-buddies (account prompt)
   (let (onlines offlines)
     (dolist (buddy (epurple-account-buddies account))
-      (let ((display-name (epurple-buddy-display-name account buddy)))
-	(with-struct-slots (name signed-on) epurple-buddy buddy
-	  (if signed-on
-	      (push (cons (propertize display-name 'face 'success) name) onlines)
-	    (push (cons (propertize display-name 'face 'error) name) offlines)))))
+      (with-struct-slots (name display-name signed-on) epurple-buddy buddy
+	(if signed-on
+	    (push (cons (propertize display-name 'face 'success) name) onlines)
+	  (push (cons (propertize display-name 'face 'error) name) offlines))))
     (let* ((collection (append onlines offlines))
 	   (target (completing-read prompt (mapcar #'car collection))))
       (assoc target collection))))
@@ -249,13 +248,6 @@
 (advice-add 'select-window :around #'epurple--select-window)
 
 ;;; External Functions
-
-(defun epurple-buddy-display-name (account buddy)
-  (let* ((protocol-id (epurple-account-protocol-id account))
-	 (name (if (string= protocol-id "prpl-facebook")
-		   (epurple-buddy-server-alias buddy)
-		 (epurple-buddy-name buddy))))
-    (decode-coding-string name 'utf-8)))
 
 (defun epurple-chat (name)
   (interactive (list (epurple--prompt-active "Chat: ")))
