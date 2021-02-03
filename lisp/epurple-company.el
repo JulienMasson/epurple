@@ -34,9 +34,8 @@
 (defun epurple-company--candidates (arg)
   (when-let* ((account (epurple--find-account-by-prpl-buffer epurple--buffer))
 	      (buddies (s-mapcar (epurple-account-buddies account) 'name))
-	      (candidates (if (epurple-company--type arg)
-			      buddies
-			    (epurple-account-chats account))))
+	      (chats (s-mapcar (epurple-account-chats account) 'name))
+	      (candidates (if (epurple-company--type arg) buddies chats)))
     (cl-remove-if-not (lambda (candidate) (string-prefix-p arg candidate))
 		      candidates)))
 

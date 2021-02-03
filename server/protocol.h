@@ -24,6 +24,7 @@
 
 void protocol_fill_buddy(char *protocol_id, PurpleBuddy *buddy, struct buddy_data *data);
 void protocol_hook_buddy(char *protocol_id, PurpleAccount *acct, PurpleBuddy *buddy);
+void protocol_fill_chat(char *protocol_id, PurpleChat *chat, struct chat_data *data);
 void protocol_hook_chat(char *protocol_id, PurpleAccount *acct, PurpleChat *chat);
 
 #endif

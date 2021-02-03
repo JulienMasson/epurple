@@ -27,6 +27,11 @@ struct buddy_data {
 	char url[STR_URL_SIZE];
 };
 
+struct chat_data {
+	char name[STR_NAME_SIZE];
+	char url[STR_URL_SIZE];
+};
+
 struct handler {
 	char command[STR_NAME_SIZE];
 	void (*func)(struct epurple *epurple, int id, char *payload, size_t len);

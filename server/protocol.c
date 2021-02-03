@@ -21,6 +21,7 @@
 struct protocol_ops {
 	void (*fill_buddy) (PurpleBuddy *buddy, struct buddy_data *data);
 	void (*hook_buddy) (PurpleAccount *acct, PurpleBuddy *buddy);
+	void (*fill_chat)  (PurpleChat *chat, struct chat_data *data);
 	void (*hook_chat)  (PurpleAccount *acct, PurpleChat *chat);
 };
 
@@ -36,6 +37,12 @@ static void default_fill_buddy(PurpleBuddy *buddy, struct buddy_data *data)
 
 static void default_hook_buddy(PurpleAccount *acct, PurpleBuddy *buddy)
 {
+}
+
+static void default_fill_chat(PurpleChat *chat, struct chat_data *data)
+{
+	if (chat->alias)
+		strncpy(data->name, chat->alias, STR_NAME_SIZE);
 }
 
 static void default_hook_chat(PurpleAccount *acct, PurpleChat *chat)
@@ -62,15 +69,44 @@ static void slack_hook_buddy(PurpleAccount *acct, PurpleBuddy *buddy)
 		create_conv(acct, PURPLE_CONV_TYPE_IM, buddy->name);
 }
 
+static void slack_fill_chat(PurpleChat *chat, struct chat_data *data)
+{
+	if (chat->alias) {
+		char chat_alias[STR_NAME_SIZE];
+		memset(chat_alias, '\0',  STR_NAME_SIZE);
+		strncpy(chat_alias, chat->alias, STR_NAME_SIZE);
+
+		char *id = strtok(chat_alias, ";");
+		char *name = strtok(NULL, ";");
+
+		char url[STR_URL_SIZE];
+		memset(url, '\0',  STR_URL_SIZE);
+		snprintf(url, STR_URL_SIZE, "https://app.slack.com/client/%s", id);
+
+		strncpy(data->name, name, STR_NAME_SIZE);
+		strncpy(data->url, url, STR_URL_SIZE);
+	}
+}
+
 static void slack_hook_chat(PurpleAccount *acct, PurpleChat *chat)
 {
-	/* create conv to get unread messages  */
-	create_conv(acct, PURPLE_CONV_TYPE_CHAT, chat->alias);
+	if (chat->alias) {
+		/* create conv to get unread messages  */
+		char chat_alias[STR_NAME_SIZE];
+		memset(chat_alias, '\0',  STR_NAME_SIZE);
+		strncpy(chat_alias, chat->alias, STR_NAME_SIZE);
+
+		strtok(chat_alias, ";");
+		char *name = strtok(NULL, ";");
+
+		create_conv(acct, PURPLE_CONV_TYPE_CHAT, name);
+	}
 }
 
 static struct protocol_ops slack_ops = {
 	slack_fill_buddy,
 	slack_hook_buddy,
+	slack_fill_chat,
 	slack_hook_chat,
 };
 
@@ -78,6 +114,7 @@ static struct protocol_ops slack_ops = {
 static struct protocol_ops facebook_ops = {
 	default_fill_buddy,
 	default_hook_buddy,
+	default_fill_chat,
 	default_hook_chat,
 };
 
@@ -85,6 +122,7 @@ static struct protocol_ops facebook_ops = {
 static struct protocol_ops whatsapp_ops = {
 	default_fill_buddy,
 	default_hook_buddy,
+	default_fill_chat,
 	default_hook_chat,
 };
 
@@ -92,6 +130,7 @@ static struct protocol_ops whatsapp_ops = {
 static struct protocol_ops irc_ops = {
 	default_fill_buddy,
 	default_hook_buddy,
+	default_fill_chat,
 	default_hook_chat,
 };
 
@@ -124,6 +163,12 @@ void protocol_hook_buddy(char *protocol_id, PurpleAccount *acct, PurpleBuddy *bu
 {
 	struct protocol_ops *ops = protocol_find(protocol_id);
 	if (ops) ops->hook_buddy(acct, buddy);
+}
+
+void protocol_fill_chat(char *protocol_id, PurpleChat *chat, struct chat_data *data)
+{
+	struct protocol_ops *ops = protocol_find(protocol_id);
+	if (ops) ops->fill_chat(chat, data);
 }
 
 void protocol_hook_chat(char *protocol_id, PurpleAccount *acct, PurpleChat *chat)

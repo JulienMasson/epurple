@@ -44,6 +44,10 @@
   signed-on
   typing-p)
 
+(cl-defstruct epurple-chat
+  name
+  url)
+
 ;; Libraries
 
 (require 'epurple-buffer)
@@ -146,6 +150,11 @@
 		(string= (epurple-buddy-name buddy) name))
 	      (epurple-account-buddies account)))
 
+(defun epurple--find-chat (account name)
+  (cl-find-if (lambda (chat)
+		(string= (epurple-chat-name chat) name))
+	      (epurple-account-chats account)))
+
 (defun epurple--prompt (prompt accounts &optional all)
   (let ((collection (mapcar (lambda (account)
 			      (with-struct-slots (name face)
@@ -199,8 +208,10 @@
 
 (defun epurple--chats-info (account chats)
   (dolist (chat chats)
-    (push (decode-coding-string (assoc-default 'name chat) 'utf-8)
-	  (epurple-account-chats account))))
+    (let ((chat-s (alist-to-struct chat 'epurple-chat)))
+      (with-struct-slots (name) epurple-chat chat-s
+	(setq name (decode-coding-string name 'utf-8)))
+      (push chat-s (epurple-account-chats account)))))
 
 (defun epurple--buddies-info (account buddies)
   (dolist (buddy buddies)
@@ -254,7 +265,7 @@
   (let* ((account (epurple--find-account name))
 	 (prompt (with-struct-slots (name face) epurple-account account
 		   (format "Chat (%s): " (propertize name 'face face))))
-	 (chat (completing-read prompt (epurple-account-chats account))))
+	 (chat (completing-read prompt (s-mapcar (epurple-account-chats account) 'name))))
     (epurple-find-conv account 2 chat chat #'epurple-buffer-conv)))
 
 (defun epurple-im (name)

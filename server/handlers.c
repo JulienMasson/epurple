@@ -209,12 +209,12 @@ static void buddies_get_all_handler(struct epurple *epurple, int id, char *paylo
 static void chats_get_all_handler(struct epurple *epurple, int id, char *payload, size_t len)
 {
 	struct account *account = (struct account *)payload;
-	PurpleAccount *acct;
-	PurpleBlistNode *node;
+	struct chat_data *chats_data = NULL;
+	struct chat_data *chat_data;
 	PurpleChat *chat;
+	PurpleBlistNode *node;
+	PurpleAccount *acct;
 	int count = 0;
-	char *chats_data = NULL;
-	char *chat_data;
 
 	acct = purple_accounts_find(account->username, account->protocol_id);
 	if (!acct) return;
@@ -225,19 +225,20 @@ static void chats_get_all_handler(struct epurple *epurple, int id, char *payload
 			chat = (PurpleChat*)node;
 			if (chat->account == acct) {
 				count++;
-				chats_data = realloc(chats_data, STR_NAME_SIZE * count);
-				chat_data = chats_data + (STR_NAME_SIZE * (count - 1));
+				chats_data = realloc(chats_data, sizeof(struct chat_data) * count);
+				chat_data = chats_data + count - 1;
 
-				memset(chat_data, '\0',  STR_NAME_SIZE);
-				strncpy(chat_data, chat->alias, STR_NAME_SIZE);
+				memset(chat_data->name, '\0',  STR_NAME_SIZE);
+				memset(chat_data->url, '\0',  STR_URL_SIZE);
 
+				protocol_fill_chat(account->protocol_id, chat, chat_data);
 				protocol_hook_chat(account->protocol_id, acct, chat);
 			}
 		}
 		node = purple_blist_node_next(node, TRUE);
 	}
 
-	emacs_send(epurple, NULL, id, chats_data, STR_NAME_SIZE * count);
+	emacs_send(epurple, NULL, id, (char *)chats_data, sizeof(struct chat_data) * count);
 	free(chats_data);
 }
 

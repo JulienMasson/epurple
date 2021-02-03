@@ -438,10 +438,14 @@
 
 (defun epurple-open-url ()
   (interactive)
-  (when-let* ((account (epurple--find-account-by-prpl-buffer epurple--buffer))
-	      (buddy-name (epurple-buffer-conv-name epurple--buffer))
-	      (buddy (epurple--find-buddy account buddy-name)))
-    (browse-url (epurple-buddy-url buddy))))
+  (when-let ((account (epurple--find-account-by-prpl-buffer epurple--buffer)))
+    (with-struct-slots (conv-type conv-name) epurple-buffer epurple--buffer
+      (cond ((= conv-type 1)
+	     (when-let ((buddy (epurple--find-buddy account conv-name)))
+	       (browse-url (epurple-buddy-url buddy))))
+	    ((= conv-type 2)
+	     (when-let ((chat (epurple--find-chat account conv-name)))
+	       (browse-url (epurple-chat-url chat))))))))
 
 (defun epurple-buffer-display (buffer)
   (if (get-buffer-window-list buffer)

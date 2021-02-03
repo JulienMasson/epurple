@@ -179,10 +179,12 @@
 	  (epurple-buffer-update account .buddy-name))))))
 
 ;; chats
-(defvar epurple--chat-spec '((name strz 80)))
+(defvar epurple--chat-spec '((name strz 80)
+			     (url  strz 128)))
 
 (defun epurple-chats-get-all-cb (cb payload)
-  (let* ((chat-length (bindat-length epurple--chat-spec '((name ""))))
+  (let* ((chat-length (bindat-length epurple--chat-spec '((name "")
+							  (url  ""))))
 	 (length (/ (length payload) chat-length))
 	 (spec `((chats repeat ,length (struct epurple--chat-spec))))
 	 (decoded (bindat-unpack spec payload)))
