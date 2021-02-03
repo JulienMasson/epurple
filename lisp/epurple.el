@@ -219,7 +219,7 @@
       (with-struct-slots (name) epurple-buddy buddy-s
 	(setq name (decode-coding-string name 'utf-8)))
       (push buddy-s (epurple-account-buddies account))))
-  (epurple-chats-get-all account (apply-partially #'epurple--chats-info account)))
+  (epurple-chats-get-all account #'epurple--chats-info))
 
 (defun epurple--accounts-info (accounts)
   (dolist (account accounts)

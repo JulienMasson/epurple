@@ -182,13 +182,13 @@
 (defvar epurple--chat-spec '((name strz 80)
 			     (url  strz 128)))
 
-(defun epurple-chats-get-all-cb (cb payload)
+(defun epurple-chats-get-all-cb (account cb payload)
   (let* ((chat-length (bindat-length epurple--chat-spec '((name "")
 							  (url  ""))))
 	 (length (/ (length payload) chat-length))
 	 (spec `((chats repeat ,length (struct epurple--chat-spec))))
 	 (decoded (bindat-unpack spec payload)))
-    (funcall cb (assoc-default 'chats decoded))))
+    (funcall cb account (assoc-default 'chats decoded))))
 
 (defun epurple-chats-get-all (account cb)
   (with-struct-slots (username alias protocol-id) epurple-account account
@@ -196,7 +196,7 @@
 		     (alias       . ,alias)
 		     (protocol-id . ,protocol-id))))
       (epurple--send "chats_get_all" payload epurple--account-spec
-		     (apply-partially #'epurple-chats-get-all-cb cb)))))
+		     (apply-partially #'epurple-chats-get-all-cb account cb)))))
 
 ;; conv
 (defvar epurple--conv-spec '((username    strz 80)
@@ -256,7 +256,6 @@
   (let* ((spec '((username   strz 80)
 		 (conv-type  u32r)
 		 (conv-name  strz 80)
-		 (conv-url   strz 80)
 		 (sender     strz 80)
 		 (flags      u32r)
 		 (time       u32r)
@@ -264,7 +263,6 @@
 	 (msg-data-length (bindat-length spec '((username "")
 						(conv-type 0)
 						(conv-name "")
-						(conv-url "")
 						(sender "")
 						(flags 0)
 						(time 0)

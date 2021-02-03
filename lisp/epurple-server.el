@@ -115,10 +115,11 @@
 	   (string-match "Waiting Emacs" str))
       (epurple-server--socket-start)
     (with-current-buffer (process-buffer proc)
-      (goto-char (point-max))
-      (let ((beg (point)))
-	(insert str)
-	(ansi-color-apply-on-region beg (point-max))))))
+      (save-excursion
+	(goto-char (point-max))
+	(let ((beg (point)))
+	  (insert str)
+	  (ansi-color-apply-on-region beg (point-max)))))))
 
 (defun epurple-server--start ()
   (let* ((default-directory epurple-server--src-dir)
