@@ -39,13 +39,18 @@
 
 (defvar epurple-server (make-epurple-server))
 
+(defvar epurple-server--kill-buffer nil)
+
 ;;; Internal Functions
 
 (defun epurple-server--sentinel (process event)
-  (let ((status (process-exit-status process)))
+  (let ((status (process-exit-status process))
+	(buffer (process-buffer process)))
     (unless (zerop status)
-      (message "%s exited with status: %s" process status)
-      (switch-to-buffer-other-window (process-buffer process)))
+      (if epurple-server--kill-buffer
+	  (kill-buffer buffer)
+	(message "%s exited with status: %s" process status)
+	(switch-to-buffer-other-window buffer)))
     (epurple-server-exit)))
 
 (defun epurple-server--filter (process str)
@@ -142,7 +147,8 @@
   (when (epurple-server--running-p)
     (process-send-string (epurple-server-socket epurple-server) buf)))
 
-(defun epurple-server-exit ()
+(defun epurple-server-exit (&optional kill-buffer)
+  (setq epurple-server--kill-buffer kill-buffer)
   (with-struct-slots (process socket pending-data) epurple-server epurple-server
     (when process (delete-process process))
     (when socket (delete-process socket))

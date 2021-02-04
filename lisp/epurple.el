@@ -317,7 +317,7 @@
 (defun epurple-exit (confirm)
   (interactive (list (yes-or-no-p "Do you really want to exit ?")))
   (when confirm
-    (epurple-server-exit)
+    (epurple-server-exit t)
     (dolist (account epurple-accounts)
       (dolist (prpl-buffer (epurple-account-prpl-buffers account))
 	(kill-buffer (epurple-buffer-buffer prpl-buffer))))
