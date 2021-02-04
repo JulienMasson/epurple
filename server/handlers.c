@@ -137,18 +137,42 @@ static PurpleConversation *find_conv(PurpleAccount *acct, int conv_type, char *c
 	return conv;
 }
 
+static void conv_chat_users(PurpleConversation *conv, char **users_data, int *count)
+{
+	PurpleConvChat *conv_chat = PURPLE_CONV_CHAT(conv);
+	GList *users;
+	PurpleConvChatBuddy *chat_buddy;
+	char *user_data;
+
+	for (users = purple_conv_chat_get_users(conv_chat); users; users = users->next) {
+		chat_buddy = users->data;
+
+		*count = *count + 1;
+		*users_data = realloc(*users_data, STR_NAME_SIZE * (*count));
+		user_data = *users_data + (STR_NAME_SIZE * ((*count) - 1));
+
+		memset(user_data, '\0',  STR_NAME_SIZE);
+		strncpy(user_data, chat_buddy->name, STR_NAME_SIZE);
+	}
+}
+
 static void find_conv_handler(struct epurple *epurple, int id, char *payload, size_t len)
 {
 	struct conv_data *conv_data = (struct conv_data *)payload;
 	PurpleAccount *acct;
 	PurpleConversation *conv;
+	char *users_data = NULL;
+	int count = 0;
 
 	acct = purple_accounts_find(conv_data->username, conv_data->protocol_id);
 	if (!acct) return;
 
 	conv = find_conv(acct, conv_data->conv_type, conv_data->conv_name);
-	if (conv)
-		emacs_ack(epurple, id);
+	if (conv) {
+		if (conv->type == PURPLE_CONV_TYPE_CHAT)
+			conv_chat_users(conv, &users_data, &count);
+		emacs_send(epurple, NULL, id, users_data, STR_NAME_SIZE * count);
+	}
 }
 
 static void update_conv_handler(struct epurple *epurple, int id, char *payload, size_t len)

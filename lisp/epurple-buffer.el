@@ -32,6 +32,7 @@
   conv-type
   conv-name
   display-name
+  users
   buffer
   mute-p
   unread-p
@@ -111,6 +112,13 @@
   :group 'epurple
   :type '(repeat (list (string :tag "Account username")
 		       (string :tag "Conversation name"))))
+
+(defcustom epurple-chat-status-users-max 8
+  "Specify the number max of user status displayed in header line of a chat.
+If there is more users than `epurple-chat-status-users-max', no header will be displayed
+in the chat buffer."
+  :group 'epurple
+  :type 'number)
 
 ;;; Internal Variables
 
@@ -351,6 +359,29 @@
   (when-let ((account (epurple--find-account-by-prpl-buffer epurple--buffer)))
     (epurple-send-msg account epurple--buffer msg)))
 
+(defun epurple-buffer--chat-header-line (account users)
+  (when (< (length users) epurple-chat-status-users-max)
+    (let (users-fmt)
+      (dolist (user users)
+	(when-let ((buddy (epurple--find-buddy account user)))
+	  (with-struct-slots (display-name signed-on typing-p) epurple-buddy buddy
+	    (let* ((name-face (if signed-on (epurple-account-face account)
+				'epurple-buddy-offline-face))
+		   (name-str (propertize display-name 'face name-face))
+		   (typing-str (if typing-p
+				   (propertize "Typing ..." 'face 'epurple-buddy-typing-face)
+				 ""))
+		   (icon-image (create-image (if signed-on
+						 epurple--icons-available
+					       epurple--icons-offline)
+					     nil nil :ascent 80))
+		   (user-fmt (format "%s %s %s" (propertize "x" 'display icon-image)
+				     name-str typing-str)))
+	      (add-to-list 'users-fmt user-fmt)))))
+      (when users-fmt
+	(setq header-line-format (string-join users-fmt " "))
+	(force-mode-line-update)))))
+
 (defun epurple-buffer--im-header-line (account buddy-name display-name)
   (when-let ((buddy (epurple--find-buddy account buddy-name)))
     (with-struct-slots (signed-on typing-p) epurple-buddy buddy
@@ -373,7 +404,7 @@
 					 typing-str))
 	(force-mode-line-update)))))
 
-(defun epurple-buffer--setup (account prpl-buffer display-name)
+(defun epurple-buffer--setup (account prpl-buffer display-name users)
   (with-struct-slots (conv-type conv-name) epurple-buffer prpl-buffer
     (let* ((account-name (epurple-account-name account))
 	   (buffer-name (format "*%s: %s*" account-name display-name)))
@@ -384,6 +415,7 @@
 	       (epurple-buffer--im-header-line account conv-name display-name)
 	       (setq mode-name "Epurple IM"))
 	      ((= conv-type 2)
+	       (when users (epurple-buffer--chat-header-line account users))
 	       (setq mode-name "Epurple Chat")))
 	(force-mode-line-update)
 	(setq lui-input-function #'epurple-buffer--send)
@@ -408,19 +440,44 @@
 		   (string= conv-name name))
 	  (throw 'found t))))))
 
-(defun epurple-buffer--new (account type name d-name)
+(defun epurple-buffer--users (account users)
+  (cl-delete (epurple-account-alias account) users :test #'string-equal))
+
+(defun epurple-buffer--new (account type name d-name &optional conv-users)
   (let ((prpl-buffer (make-epurple-buffer))
 	(prpl-buffers (epurple-account-prpl-buffers account)))
-    (with-struct-slots (conv-type conv-name display-name buffer mute-p)
+    (with-struct-slots (conv-type conv-name display-name users buffer mute-p)
       epurple-buffer prpl-buffer
       (setq conv-type type)
       (setq conv-name name)
       (setq display-name d-name)
-      (setq buffer (epurple-buffer--setup account prpl-buffer display-name))
+      (setq users (epurple-buffer--users account conv-users))
+      (setq buffer (epurple-buffer--setup account prpl-buffer display-name users))
       (setq mute-p (epurple-buffer--auto-mute account name))
       (push prpl-buffer prpl-buffers)
       (setf (epurple-account-prpl-buffers account) prpl-buffers)
       prpl-buffer)))
+
+(defun epurple-buffer--set-users (account conv-type conv-name display-name conv-users)
+  (when-let ((prpl-buffer (epurple-buffer--find account conv-type conv-name)))
+    (with-struct-slots (users buffer) epurple-buffer prpl-buffer
+      (setq users (epurple-buffer--users account conv-users))
+      (with-current-buffer buffer
+	(epurple-buffer--chat-header-line account users)))))
+
+(defun epurple-buffer--update-im-conv (account name)
+  (when-let ((prpl-buffer (epurple-buffer--find account 1 name)))
+    (with-struct-slots (display-name buffer) epurple-buffer prpl-buffer
+      (when (buffer-live-p buffer)
+	(with-current-buffer buffer
+	  (epurple-buffer--im-header-line account conv-name display-name))))))
+
+(defun epurple-buffer--update-chat-conv (account name)
+  (dolist (prpl-buffer (epurple-account-prpl-buffers account))
+    (with-struct-slots (conv-type buffer users) epurple-buffer prpl-buffer
+      (when (and (= conv-type 2) (member name users))
+	(with-current-buffer buffer
+	  (epurple-buffer--chat-header-line account users))))))
 
 ;;; External Functions
 
@@ -455,13 +512,9 @@
     (with-struct-slots (conv-type conv-name) epurple-buffer epurple--buffer
       (epurple-update-conv account conv-type conv-name))))
 
-(defun epurple-buffer-update (account conv-name)
-  ;; fow now only IM conv are updated
-  (when-let ((prpl-buffer (epurple-buffer--find account 1 conv-name)))
-    (with-struct-slots (display-name buffer) epurple-buffer prpl-buffer
-      (when (buffer-live-p buffer)
-	(with-current-buffer buffer
-	  (epurple-buffer--im-header-line account conv-name display-name))))))
+(defun epurple-buffer-buddy-update (account name)
+  (epurple-buffer--update-im-conv account name)
+  (epurple-buffer--update-chat-conv account name))
 
 (defun epurple-buffer-new-msg (header msg)
   (let-alist header
@@ -476,14 +529,19 @@
 				(epurple-buddy-display-name buddy))
 			    .conv-name)))
 	(unless prpl-buffer
-	  (setq prpl-buffer (epurple-buffer--new account .conv-type .conv-name display-name)))
+	  (setq prpl-buffer (epurple-buffer--new account .conv-type .conv-name display-name))
+	  ;; get users list only for chat
+	  (when (= .conv-type 2)
+	    (epurple-find-conv account .conv-type .conv-name .conv-name
+			       #'epurple-buffer--set-users)))
 	(epurple-buffer--insert-msg account (epurple-buffer-buffer prpl-buffer)
 				    sender sender-display-name msg .time)))))
 
-(defun epurple-buffer-conv (account conv-type conv-name display-name)
+(defun epurple-buffer-conv (account conv-type conv-name display-name users)
   (let ((prpl-buffer (epurple-buffer--find account conv-type conv-name)))
     (unless prpl-buffer
-      (setq prpl-buffer (epurple-buffer--new account conv-type conv-name display-name))
+      (setq prpl-buffer (epurple-buffer--new account conv-type conv-name
+					     display-name users))
       (epurple-buffer-display (epurple-buffer-buffer prpl-buffer)))))
 
 (provide 'epurple-buffer)

@@ -161,7 +161,7 @@
 		  (buddy-name (decode-coding-string .buddy-name 'utf-8))
 		  (buddy (epurple--find-buddy account buddy-name)))
 	(setf (epurple-buddy-typing-p buddy) (not (zerop .typing)))
-	(epurple-buffer-update account .conv-name)))))
+	(epurple-buffer-buddy-update account .conv-name)))))
 
 (defun epurple-buddy-update (payload)
   (let* ((spec '((account-username strz 80)
@@ -176,7 +176,7 @@
 	(with-struct-slots (icon signed-on) epurple-buddy buddy
 	  (setq icon .icon)
 	  (setq signed-on (not (zerop .online)))
-	  (epurple-buffer-update account .buddy-name))))))
+	  (epurple-buffer-buddy-update account .buddy-name))))))
 
 ;; chats
 (defvar epurple--chat-spec '((name strz 80)
@@ -204,8 +204,16 @@
 			     (conv-type   u32r)
 			     (conv-name   strz 80)))
 
-(defun epurple-find-conv-cb (cb account conv-type conv-name display-name payload)
-  (funcall cb account conv-type conv-name display-name))
+(defvar epurple--conv-users-spec '((name strz 80)))
+
+(defun epurple-find-conv-cb (account conv-type conv-name display-name cb payload)
+  (let* ((users-length (bindat-length epurple--conv-users-spec '((name ""))))
+	 (length (/ (length payload) users-length))
+	 (spec `((users repeat ,length (struct epurple--conv-users-spec))))
+	 (decoded (bindat-unpack spec payload))
+	 (users (assoc-default 'users decoded)))
+    (funcall cb account conv-type conv-name display-name
+	     (mapcar (lambda (e) (cdr (car e))) users))))
 
 (defun epurple-find-conv (account conv-type conv-name display-name cb)
   (with-struct-slots (username protocol-id) epurple-account account
@@ -215,7 +223,7 @@
 		     (conv-name   . ,conv-name))))
       (epurple--send "find_conv" payload epurple--conv-spec
 		     (apply-partially #'epurple-find-conv-cb
-				      cb account conv-type conv-name display-name)))))
+				      account conv-type conv-name display-name cb)))))
 
 (defun epurple-update-conv (account conv-type conv-name)
   (with-struct-slots (username protocol-id) epurple-account account
