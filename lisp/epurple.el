@@ -257,7 +257,6 @@
       (when (and (derived-mode-p 'lui-mode)
 		 (not (eq prev-buffer next-buffer)))
 	(epurple-buffer-remove-unread-separator prev-buffer)))))
-(advice-add 'select-window :around #'epurple--select-window)
 
 ;;; External Functions
 
@@ -317,6 +316,7 @@
 
 (defun epurple-exit (confirm)
   (interactive (list (yes-or-no-p "Do you really want to exit ?")))
+  (advice-remove 'select-window #'epurple--select-window)
   (when confirm
     (epurple-server-exit t)
     (dolist (account epurple-accounts)
@@ -326,6 +326,7 @@
 
 (defun epurple-init ()
   (interactive)
+  (advice-add 'select-window :around #'epurple--select-window)
   (epurple-server-init))
 
 (defun epurple-set-log-level (log-level)
