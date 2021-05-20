@@ -22,6 +22,7 @@
 ;;; Code:
 
 (require 'dom)
+(require 'language-detection)
 (require 'lui)
 
 (require 'epurple-company)
@@ -134,7 +135,7 @@ in the chat buffer."
   "\\(?:\\`\\|\\W\\)\\(\\(`\\)\\(\\(?:.\\)*?[^`]\\)\\(\\2\\)\\)\\(?:[^`]\\|\\'\\)")
 
 (defconst epurple-block-code-regexp
-  "\\(?:^\\|[[:blank:]]\\)\\(```\\)\\(?:\n\\)?\\(\\(.\\|\n\\)*?\\)\\(\n?```\\)[[:blank:]]*$")
+  "\\(?:^\\|[[:blank:]]\\)\\(```\\)\\(?:\n\\)?\\(\\(.\\|\n\\)*?\\)\\(\n?```\\)[[:blank:]]*")
 
 (defconst epurple--icons-dir (expand-file-name (concat (file-name-directory load-file-name)
 							      "../icons/")))
@@ -303,17 +304,31 @@ in the chat buffer."
       (put-text-property beg end 'face 'epurple-inline-code-face)
       (put-text-property markup-end-beg markup-end-end 'invisible t))))
 
+(defun epurple-buffer--mrkdwn-block-code-highlight (str)
+  (with-temp-buffer
+    (insert str)
+    (if-let* ((modes '((c         . c-mode)
+		       (emacslisp . emacs-lisp-mode)
+		       (python    . python-mode)
+		       (shell     . sh-mode)))
+	      (language (language-detection-string str))
+	      (mode (assoc-default language modes)))
+	(funcall mode)
+      (put-text-property (point-min) (point-max) 'face 'epurple-block-code-face))
+    (org-font-lock-ensure)
+    (buffer-string)))
+
 (defun epurple-buffer--mrkdwn-block-code ()
   (while (re-search-forward epurple-block-code-regexp (point-max) t)
-    (when-let ((markup-start-beg (match-beginning 1))
-               (markup-start-end (match-end 1))
-	       (beg (match-beginning 2))
-               (end (match-end 2))
-	       (markup-end-beg (match-beginning 4))
-               (markup-end-end (match-end 4)))
-      (put-text-property markup-start-beg markup-start-end 'invisible t)
-      (put-text-property beg end 'face 'epurple-block-code-face)
-      (put-text-property markup-end-beg markup-end-end 'invisible t))))
+    (when-let* ((markup-start-beg (match-beginning 1))
+		(beg (match-beginning 2))
+		(end (match-end 2))
+		(markup-end-end (match-end 4))
+		(str (buffer-substring-no-properties beg end))
+		(str (epurple-buffer--mrkdwn-block-code-highlight str)))
+      (delete-region markup-start-beg markup-end-end)
+      (goto-char markup-start-beg)
+      (insert "\n" str "\n"))))
 
 (defun epurple-buffer--mrkdwn-fontify (text)
   (with-temp-buffer
