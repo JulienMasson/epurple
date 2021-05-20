@@ -238,7 +238,8 @@
 
 (defun epurple--mark-buffer-as-read (buffer)
   (when-let ((prpl-buffer (epurple--find-prpl-buffer buffer)))
-    (with-struct-slots (unread-p unread-count) epurple-buffer prpl-buffer
+    (with-struct-slots (mention-p unread-p unread-count) epurple-buffer prpl-buffer
+      (setq mention-p nil)
       (setq unread-p nil)
       (setq unread-count 0))))
 

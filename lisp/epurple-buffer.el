@@ -35,6 +35,7 @@
   users
   buffer
   mute-p
+  mention-p
   unread-p
   (unread-count 0))
 
@@ -251,6 +252,13 @@ in the chat buffer."
       (setq unread-count (incf unread-count))
       (epurple-buffer--update-unread-separator buffer unread-count))))
 
+(defun epurple-buffer--check-mention (account buffer msg)
+  (when-let ((prpl-buffer (cl-find-if (lambda (prpl-buffer)
+					(eq buffer (epurple-buffer-buffer prpl-buffer)))
+				      (epurple-account-prpl-buffers account))))
+    (when (string-match (epurple-account-alias account) msg)
+      (setf (epurple-buffer-mention-p prpl-buffer) t))))
+
 (defun epurple-buffer--need-header-p (sender time)
   (let (previous-time previous-sender)
     (save-excursion
@@ -345,6 +353,7 @@ in the chat buffer."
 
 (defun epurple-buffer--insert-msg (account buffer sender sender-display-name msg time)
   (unless (eq (window-buffer (selected-window)) buffer)
+    (epurple-buffer--check-mention account buffer msg)
     (epurple-buffer--incf-unread-count account buffer))
   (let* ((sender-name (epurple-buffer--propertize-sender account sender-display-name))
 	 (icon (epurple-buffer--find-icon account sender))
