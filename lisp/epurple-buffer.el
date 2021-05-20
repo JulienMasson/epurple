@@ -494,7 +494,7 @@ in the chat buffer."
     (with-struct-slots (display-name buffer) epurple-buffer prpl-buffer
       (when (buffer-live-p buffer)
 	(with-current-buffer buffer
-	  (epurple-buffer--im-header-line account conv-name display-name))))))
+	  (epurple-buffer--im-header-line account name display-name))))))
 
 (defun epurple-buffer--update-chat-conv (account name)
   (dolist (prpl-buffer (epurple-account-prpl-buffers account))
