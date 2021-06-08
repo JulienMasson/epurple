@@ -57,9 +57,9 @@ static void slack_fill_buddy(PurpleBuddy *buddy, struct buddy_data *data)
 		strncpy(data->display_name, buddy->name, STR_NAME_SIZE);
 	}
 
-	if (buddy->alias)
+	if (buddy->node.ui_data)
 		snprintf(data->url, STR_URL_SIZE, "https://app.slack.com/client/%s",
-			 buddy->alias);
+			 buddy->node.ui_data);
 }
 
 static void slack_hook_buddy(PurpleAccount *acct, PurpleBuddy *buddy)
@@ -71,12 +71,12 @@ static void slack_hook_buddy(PurpleAccount *acct, PurpleBuddy *buddy)
 
 static void slack_fill_chat(PurpleChat *chat, struct chat_data *data)
 {
-	if (chat->alias) {
-		char chat_alias[STR_NAME_SIZE];
-		memset(chat_alias, '\0',  STR_NAME_SIZE);
-		strncpy(chat_alias, chat->alias, STR_NAME_SIZE);
+	if (chat->node.ui_data) {
+		char chat_data[256];
+		memset(chat_data, '\0', 256);
+		strncpy(chat_data, chat->node.ui_data, 256);
 
-		char *id = strtok(chat_alias, ";");
+		char *id = strtok(chat_data, ";");
 		char *name = strtok(NULL, ";");
 
 		char url[STR_URL_SIZE];
@@ -90,13 +90,13 @@ static void slack_fill_chat(PurpleChat *chat, struct chat_data *data)
 
 static void slack_hook_chat(PurpleAccount *acct, PurpleChat *chat)
 {
-	if (chat->alias) {
+	if (chat->node.ui_data) {
 		/* create conv to get unread messages  */
-		char chat_alias[STR_NAME_SIZE];
-		memset(chat_alias, '\0',  STR_NAME_SIZE);
-		strncpy(chat_alias, chat->alias, STR_NAME_SIZE);
+		char chat_data[256];
+		memset(chat_data, '\0', 256);
+		strncpy(chat_data, chat->node.ui_data, 256);
 
-		strtok(chat_alias, ";");
+		strtok(chat_data, ";");
 		char *name = strtok(NULL, ";");
 
 		create_conv(acct, PURPLE_CONV_TYPE_CHAT, name);

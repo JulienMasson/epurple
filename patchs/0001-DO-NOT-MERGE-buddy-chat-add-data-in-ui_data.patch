@@ -1,0 +1,56 @@
+From 06da4607a0889ba43dcc3060e876b2e359af4cb3 Mon Sep 17 00:00:00 2001
+From: Julien Masson <massonju.eseo@gmail.com>
+Date: Tue, 8 Jun 2021 08:59:44 +0200
+Subject: [PATCH] [DO NOT MERGE] buddy/chat: add data in ui_data
+
+Signed-off-by: Julien Masson <massonju.eseo@gmail.com>
+---
+ slack-channel.c | 9 ++++++++-
+ slack-im.c      | 9 ++++++++-
+ 2 files changed, 16 insertions(+), 2 deletions(-)
+
+diff --git a/slack-channel.c b/slack-channel.c
+index ace14a3..1a3348e 100644
+--- a/slack-channel.c
++++ b/slack-channel.c
+@@ -116,8 +116,15 @@ SlackChannel *slack_channel_set(SlackAccount *sa, json_value *json, SlackChannel
+ 		} else {
+ 			chan->object.buddy = PURPLE_BLIST_NODE(purple_chat_new(sa->account, chan->object.name,
+ 					slack_chat_info_defaults(sa->gc, chan->object.name)));
++
++			PurpleChat *chat = channel_buddy(chan);
++			char *chat_data = malloc(sizeof(char) * 256);
++			memset(chat_data, '\0', 256);
++			snprintf(chat_data, 256, "%s/%s;%s;", sa->team.id, id, chan->object.name);
++			chat->node.ui_data = chat_data;
++
+ 			slack_blist_cache(sa, chan->object.buddy, sid);
+-			purple_blist_add_chat(channel_buddy(chan), sa->blist, NULL);
++			purple_blist_add_chat(chat, sa->blist, NULL);
+ 		}
+ 	}
+ 	else if (chan->type < SLACK_CHANNEL_MEMBER) {
+diff --git a/slack-im.c b/slack-im.c
+index a5dcb07..ecdb2a2 100644
+--- a/slack-im.c
++++ b/slack-im.c
+@@ -78,8 +78,15 @@ SlackUser *slack_im_set(SlackAccount *sa, json_value *json, const json_value *op
+ 				}
+ 			} else {
+ 				user->object.buddy = PURPLE_BLIST_NODE(purple_buddy_new(sa->account, user->object.name, NULL));
++
++				PurpleBuddy *buddy = user_buddy(user);
++				char *buddy_url = malloc(sizeof(char) * 256);
++				memset(buddy_url, '\0', 256);
++				snprintf(buddy_url, 256, "%s/%s", sa->team.id, id);
++				buddy->node.ui_data = buddy_url;
++
+ 				slack_blist_cache(sa, user->object.buddy, sid);
+-				purple_blist_add_buddy(user_buddy(user), NULL, sa->blist, NULL);
++				purple_blist_add_buddy(buddy, NULL, sa->blist, NULL);
+ 				changed = TRUE;
+ 			}
+ 		}
+-- 
+2.30.2
+
