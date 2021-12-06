@@ -274,7 +274,9 @@
 	 (prompt (with-struct-slots (name face) epurple-account account
 		   (format "IM (%s): " (propertize name 'face face)))))
     (pcase-let ((`(,display-name . ,name) (epurple--prompt-buddies account prompt)))
-      (epurple-find-conv account 1 name display-name #'epurple-buffer-conv))))
+      (if-let ((prpl-buffer (epurple-buffer--find account 1 display-name)))
+	  (pop-to-buffer (epurple-buffer-buffer prpl-buffer))
+	(epurple-find-conv account 1 name display-name #'epurple-buffer-conv)))))
 
 (defun epurple-mute-toggle (buffer)
   (interactive (list (epurple--prompt-buffers "Toggle Mute: ")))
